@@ -1,0 +1,6 @@
+﻿.layout{position:relative; width:990px; height:330px;}
+.panle{ overflow:hidden; font-size:12px;}
+.layout-panle{position:absolute; background-color:Red;}
+.layout-split-proxy-h{width:5px;}
+.layout-split-proxy-v{height:5px;}
+.layout-split-proxy-h,.layout-split-proxy-v{position:absolute; display:none; background-color:#ccc; font-size:1px; z-index:5;}
