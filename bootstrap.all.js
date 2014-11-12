@@ -6,6 +6,7 @@
 * @datetime 20140929
 */
 var BootStrap = window.BootStrap || {};
+
 /**
 * 初始化这里用到的扩展函数
 */
@@ -16,6 +17,12 @@ var BootStrap = window.BootStrap || {};
             function ($1, $2) {
                 return args[$2];
             });
+    };
+    String.htmlEncode = function (str) {
+        return str.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    };
+    String.wrap = function (str) {
+        return str.replace(/\r\n/g, '<br />');
     };
     Array.prototype.contains = function (obj) {
         var i = this.length;
@@ -45,7 +52,8 @@ var BootStrap = window.BootStrap || {};
             }
         }
         return newArray;
-    }
+    };
+
 })();
 /**
 * 列表组件
@@ -53,40 +61,15 @@ var BootStrap = window.BootStrap || {};
 * @description bootstrap列表页面的扩展
 */
 BootStrap.Datagrid = {
-    /*保存所有DataGrid的状态*/
-    DataGridStatusColl: [],
-    /*保存所有DataGrid的数据*/
-    DataGridSetDataColl: [],
-    /*临时保存当前操作的DataGrid的状态*/
-    DataGridStatus: {
-        /*列表的TableId*/
-        tableId: null,
-        /*是否首次加载页面*/
-        isFirstLoad: true,
-        /*用户设置的字段顺序*/
-        columnSequence: [],
-        isSelectOnCheckEvent: false,
-        selectTrIndexColl: [],
-        /*已经选中列表中的checkbox的索引集合*/
-        checkedBoxIndexColl: [],
-        cacheCheckBox: null,
-        /*是否是jQuery调用click方法执行点击*/
-        isJqClickCheckBox: { isJqClick: false, value: false },
-        /*全选checkbox的ID*/
-        checkAllId: "check_all",
-        /*是否是点击全选按钮*/
-        isCheckAllEvent: false
-    },
-    /*临时保存当前操作的DataGrid的数据*/
+    AllGridDataCache: [],
     DataGridSetData: {
-        tableId: null,
         //DataGrid列配置对象
         columns: undefined,
         //同列属性，但是这些列将会被冻结在左侧。
         frozenColumns: undefined,
         //该方法类型请求远程数据。
         method: "POST",
-        //顶部工具栏的DataGrid面板。可能的值：1) 一个数组，每个工具属性都和linkbutton一样。2) 选择器指定的工具栏。 
+        //顶部工具栏的DataGrid面板。可能的值：1) 一个数组，每个工具属性都和linkbutton一样。2) 字符串ID,选择器指定的工具栏。 
         toolbar: null,
         //如果为true，则在同一行中显示数据；为false，过长就会换行
         nowrap: true,
@@ -97,9 +80,11 @@ BootStrap.Datagrid = {
         /*所有页的数据，如果url为空，就判断这个是否有数据*/
         gridData: null,
         loadMsg: "正在努力加载数据...",
+        title: null,
         //如果为true，则在DataGrid控件底部显示分页工具栏。
         pagination: true,
-        rownumbers: false,
+        rownumbers: false, /*显示行号*/
+        checkbox: false, /*显示checkbox*/
         singleSelect: true,
         /*如果为true，当用户点击行的时候该复选框就会被选中或取消选中。如果为false，当用户仅在点击该复选框的时候才会呗选中或取消*/
         checkOnSelect: true,
@@ -109,7 +94,7 @@ BootStrap.Datagrid = {
         pagePosition: "bottom", //XXXXXX
         pageIndex: 1,
         pageSize: 20,
-        pageList: [10, 20, 30, 40, 50],
+        pageList: [20, 50, 80, 100],
         queryParams: {},
         sortName: null, //XXXXXX
         //只能是'asc'或'desc'
@@ -147,99 +132,27 @@ BootStrap.Datagrid = {
         onCheckAll: null,
         /*取消勾选所有行的时候触发 function (rows) { }*/
         onUncheckAll: null,
-        onRowContextMenu: function (e, rowIndex, rowData) { }
-    },
-    /*是否存在某个Id的Grid数据*/
-    IsExistGridById: function () {
-        for (var i in this.DataGridSetDataColl) {
-            if (this.DataGridSetDataColl[i].tableId === tableId) {
-                return true;
-            }
-        }
-        return false;
-    },
-    /**
-    * 根据tableId标识获取这个grid对应的数据，并保存到变量this.DataGridSetData和this.DataGridStatus
-    */
-    GetGridDataById: function (tableId) {
-        this.GetGridSetDataById(tableId);
-        this.GetGridStatusDataById(tableId);
-    },
-    /*根据tableId标识获取这个grid对应的数据，并保存到变量this.DataGridSetData*/
-    GetGridSetDataById: function (tableId) {
-        if (this.DataGridSetData && this.DataGridSetData.tableId == tableId) {//如果缓存就是这个Grid的数据，就不需要重新获取
-            return;
-        }
-        for (var i in this.DataGridSetDataColl) {
-            if (this.DataGridSetDataColl[i].tableId === tableId) {
-                this.DataGridSetData = BootStrap.Tools.Clone(this.DataGridSetDataColl[i]);
-                return;
-            }
-        }
-        //如果找不到tableId的数据，就设置关键数据为空 
-        this.DataGridSetData.tableId = null;
-        this.DataGridSetData.data = null;
-        this.DataGridSetData.url = null;
-        this.DataGridSetData.columns = null;
-        this.DataGridSetData.gridData = null;
-        this.DataGridSetData.frozenColumns = null;
-    },
-    /*根据tableId标识获取这个grid对应的状态，并保存到变量this.DataGridStatus*/
-    GetGridStatusById: function (tableId) {
-        if (this.DataGridStatus && this.DataGridStatus.tableId == tableId) {//如果缓存就是这个Grid的数据，就不需要重新获取
-            return;
-        }
-        for (var i in this.DataGridStatusColl) {
-            if (this.DataGridStatusColl[i].tableId === tableId) {
-                this.DataGridStatus = BootStrap.Tools.Clone(this.DataGridStatusColl[i]);
-                return;
-            }
-        }
-    },
-    /**
-    * 更新Grid状态的某个key的值
-    * @param {String} tableId，操作的tableId
-    * @param {String} key，更新的key
-    * @param {String} value，更新key的值
-    */
-    SetGridStatusDetailById: function (tableId, key, value) {
-        for (var i in this.DataGridStatusColl) {
-            if (this.DataGridStatusColl[i].tableId === tableId) {
-                this.DataGridStatusColl[i][key] = value; //更新值
-                this.DataGridStatus = BootStrap.Tools.Clone(this.DataGridStatusColl[i]); //更新变量值
-                return;
-            }
-        }
-    },
-    /**
-    * 更新Grid数据某个key的值
-    * @param {String} tableId，操作的tableId
-    * @param {String} key，更新的key
-    * @param {String} value，更新key的值
-    */
-    SetGridDataDetailById: function (tableId, key, value) {
-        for (var i in this.DataGridSetDataColl) {
-            if (this.DataGridSetDataColl[i].tableId === tableId) {
-                this.DataGridSetDataColl[i][key] = value; //更新值
-                this.DataGridSetData = BootStrap.Tools.Clone(this.DataGridSetDataColl[i]); //更新变量值
-                return;
-            }
-        }
-    },
-    /**
-    * 更新某个Grid的所有值
-    * @param {String} tableId，操作的tableId
-    * @param {String} jsonData，table的Json数据
-    */
-    SetGridDataById: function (tableId, jsonData) {
-        this.DataGridSetData = BootStrap.Tools.Clone(jsonData); //更新变量值
-        for (var i in this.DataGridSetDataColl) {
-            if (this.DataGridSetDataColl[i].tableId === tableId) {
-                this.DataGridSetDataColl[i][key] = BootStrap.Tools.Clone(jsonData); //更新值                
-                return;
-            }
-        }
-        BootStrap.Datagrid.DataGridSetDataColl.push(BootStrap.Tools.Clone(jsonData)); //如果不存在这个datagrid就追加进来
+        onRowContextMenu: function (e, rowIndex, rowData) { },
+
+
+        //#region  grid的状态，这些值不能手动设置
+        /*是否首次加载页面*/
+        isFirstLoad: true,
+        isCheckOnSelectEvent: false,
+        selectTrIndexColl: [],
+        /*已经选中列表中的checkbox的索引集合*/
+        checkedBoxIndexColl: [],
+        /*全选checkbox的状态*/
+        cacheGlobalBoxStatus: false,
+        /*是否是jQuery调用click方法执行点击*/
+        isJqClickCheckBox: { isJqClick: false, value: false },
+        /*列表的TableId*/
+        tableId: null,
+        /*全选checkbox的ID*/
+        checkAllId: "ck_all",
+        /*是否是点击全选按钮*/
+        isCheckAllEvent: false
+        //#endregion
     },
     /**
     * 列表列的拖拽功能
@@ -247,8 +160,8 @@ BootStrap.Datagrid = {
     * @description 支持动态改变列的宽度
     */
     DragTableColumn: {
-        //表格列的数量
-        _headDivCount: 0,
+        //是否是左边冻结datagrid
+        _isLeftDg: true,
         //表格列表头是否有左键点击进行拖拽操作
         _headDivHasMouseDown: false,
         //点击的表头是那一列div的前面
@@ -256,7 +169,7 @@ BootStrap.Datagrid = {
         //拖拽操作开始时，鼠标的X坐标
         _mouseDownX: 0,
         //分割线html
-        _resizeProxyHtml: '<div class="resize_proxy" style="left: 329px;position: absolute;width: 1px;height: 10000px;top: 0;cursor: e-resize;display: none;background: #aac5e7;"></div>',
+        _resizeProxyHtml: '<div class="resize_proxy" style="left: 329px;position: absolute;width: 1px;height: 10000px;top: 0;cursor: e-resize;display: none;background: #aac5e7;z-index:100;"></div>',
         //分割线jquery对象，为什么缓存起来，防止查找因为很耗时，会出现闪动很厉害        
         _jqResizeProxyObject: null,
         Init: function (tableId) {
@@ -264,50 +177,49 @@ BootStrap.Datagrid = {
                 return;
             }
             this.CreateResizeProxyLine(); //创建列拖动标识竖线
-            $(".datagrid-header th:gt(0)").css("padding", "0"); //th中的div必须贴近th的边缘
-            var threadDiv = $(".datagrid-header th div");
-            this._headDivCount = threadDiv.length;
-            if (this._headDivCount > 1) {
-                threadDiv.each(function (i) {
-                    $(this).mouseenter(function (e) {
-                        BootStrap.Datagrid.DragTableColumn.HeadDivMouseEvent($(this), event || e);
-                    }).mouseleave(function () {
-                        BootStrap.Datagrid.DragTableColumn.HeadDivMouseEvent($(this), event || e);
-                    }).mousedown(function (e) {
-                        if (event.button == 1 || event.button == 0) {//左键单击                            
-                            var isTrue = BootStrap.Datagrid.DragTableColumn.HeadDivMouseEvent($(this), event || e);
-                            if (isTrue) {
-                                BootStrap.Datagrid.DragTableColumn._witchHeadDivMouseDown = $(this);
-                                BootStrap.Datagrid.DragTableColumn._headDivHasMouseDown = true;
-                                BootStrap.Datagrid.DragTableColumn._mouseDownX = event.clientX;
-                                var mainT = $("#" + tableId);
-                                var tableHeight = mainT.height();
-                                BootStrap.Datagrid.DragTableColumn._jqResizeProxyObject = BootStrap.Datagrid.DragTableColumn.GetResizeProxyLine();
-                                BootStrap.Datagrid.DragTableColumn._jqResizeProxyObject.css({ "height": tableHeight + "px", "left": event.clientX + "px", "top": mainT.offset().top + "px" }).show();
-                                $("body").bind("selectstart", function () {
-                                    return false;
-                                });
-                            }
-                        }
-                    });
-                });
+            var currGridData = BootStrap.Datagrid.GetGridDataById(tableId);
+            var hasFrozenData = currGridData.frozenColumns && currGridData.frozenColumns.length > 0;
+            if (hasFrozenData) {
+                var lhTid = tableId + "_lh_t";
+                this.BandDragEvent(lhTid, tableId + "_ldg");
+                this.MouseMoveEvent(lhTid);
+            }
+            if (currGridData.columns && currGridData.columns.length > 0) {
+                var rhTid = tableId + "_rh_t";
+                this.BandDragEvent(rhTid, tableId + "_rdg");
+                this.MouseMoveEvent(rhTid);
             }
             $("body").mouseup(function (e) {//松开鼠标
                 if (BootStrap.Datagrid.DragTableColumn._headDivHasMouseDown) {
                     BootStrap.Datagrid.DragTableColumn._headDivHasMouseDown = false;
                     if (BootStrap.Datagrid.DragTableColumn._witchHeadDivMouseDown) {
-                        //var proxyOffset = BootStrap.Datagrid.DragTableColumn._jqResizeProxyObject.offset();
                         var newWidth;
                         var prevDiv = BootStrap.Datagrid.DragTableColumn._witchHeadDivMouseDown.parent().prev().children().eq(0);
-                        var cursorX = event.clientX;
+                        var cursorX = BootStrap.Datagrid.DragTableColumn._jqResizeProxyObject.offset().left;
+                        var position = 0;
+                        var funSetViewW = function (lviewId, width) {
+                            var lview = $(lviewId);
+                            lview.css("width", (lview.width() + width) + "px");
+                        };
                         if (cursorX > BootStrap.Datagrid.DragTableColumn._mouseDownX) {
-                            newWidth = prevDiv.width() + cursorX - BootStrap.Datagrid.DragTableColumn._mouseDownX;
-                            newWidth = newWidth + 7; //误差值
+                            position = cursorX - BootStrap.Datagrid.DragTableColumn._mouseDownX;
+                            newWidth = prevDiv.innerWidth() + position;
+                            if (BootStrap.Datagrid.DragTableColumn._isLeftDg) {
+                                funSetViewW(tableId + "_lview", position);
+                                funSetViewW(tableId + "_lh_t", position);
+                                funSetViewW(tableId + "_lbody", position);
+                            }
                         } else {
-                            newWidth = prevDiv.width() - (BootStrap.Datagrid.DragTableColumn._mouseDownX - cursorX);
-                            newWidth = newWidth - 7; //误差值
+                            position = BootStrap.Datagrid.DragTableColumn._mouseDownX - cursorX;
+                            newWidth = prevDiv.innerWidth() - position;
+                            if (BootStrap.Datagrid.DragTableColumn._isLeftDg) {
+                                funSetViewW(tableId + "_lview", -position);
+                                funSetViewW(tableId + "_lh_t", -position);
+                                funSetViewW(tableId + "_lbody", -position);
+                            }
                         }
-                        prevDiv.css("width", String(newWidth) + "px");
+
+                        prevDiv.css("width", String(newWidth) + "px").parent().css("width", String(newWidth + 1) + "px");
                         BootStrap.Datagrid.DragTableColumn._witchHeadDivMouseDown.css("cursor", "default");
                         BootStrap.Datagrid.DragTableColumn._witchHeadDivMouseDown = null;
                     }
@@ -316,7 +228,45 @@ BootStrap.Datagrid = {
                     $("body").unbind("selectstart");
                 }
             });
-            $(".datagrid-header").mousemove(function () {//按住鼠标移动事件
+
+        },
+        BandDragEvent: function (headTid, bodyTid) {
+            $(headTid + " th:gt(1)").css("padding", "0"); //th中的div必须贴近th的边缘
+            var threadDiv = $(headTid + " th div:gt(0)");
+            if (threadDiv.length > 0) {
+                threadDiv.each(function (i) {
+                    $(this).mouseenter(function (e) {
+                        BootStrap.Datagrid.DragTableColumn.HeadDivMouseEvent($(this), event || e);
+                    }).mouseleave(function () {
+                        BootStrap.Datagrid.DragTableColumn.HeadDivMouseEvent($(this), event || e);
+                    }).mousedown(function (e) {
+                        if (event.button == 1 || event.button == 0) {//左键单击  
+                            var dragColHandler = BootStrap.Datagrid.DragTableColumn;
+                            var isTrue = dragColHandler.HeadDivMouseEvent($(this), event || e);
+                            if (isTrue) {
+                                dragColHandler._witchHeadDivMouseDown = $(this);
+                                dragColHandler._headDivHasMouseDown = true;
+                                dragColHandler._mouseDownX = event.clientX;
+                                if (headTid.indexOf("_lh_t") > -1) {
+                                    dragColHandler._isLeftDg = true;
+                                } else {
+                                    dragColHandler._isLeftDg = false;
+                                }
+                                var mainT = $(headTid);
+                                var tableHeight = mainT.height() + $(bodyTid).height();
+                                dragColHandler._jqResizeProxyObject = dragColHandler.GetResizeProxyLine();
+                                dragColHandler._jqResizeProxyObject.css({ "height": tableHeight + "px", "left": event.clientX + "px", "top": mainT.offset().top + "px" }).show();
+                                $("body").bind("selectstart", function () {
+                                    return false;
+                                });
+                            }
+                        }
+                    });
+                });
+            }
+        },
+        MouseMoveEvent: function (headTid) {
+            $(headTid).mousemove(function () {//按住鼠标移动事件
                 if (BootStrap.Datagrid.DragTableColumn._headDivHasMouseDown) {
                     BootStrap.Datagrid.DragTableColumn._jqResizeProxyObject.css("left", event.clientX + "px");
                 }
@@ -324,7 +274,10 @@ BootStrap.Datagrid = {
         },
         //创建分割线:竖线
         CreateResizeProxyLine: function () {
-            $("body").append($(this._resizeProxyHtml));
+            var proxy = $(".resize_proxy");
+            if (proxy.length < 1) {
+                $("body").append($(this._resizeProxyHtml));
+            }
         },
         GetResizeProxyLine: function () {
             return $(".resize_proxy");
@@ -339,7 +292,7 @@ BootStrap.Datagrid = {
             //}
         },
         ChangeCursor: function (jqDiv, leftOrRight, e) {
-            if (Math.abs(leftOrRight - e.clientX) < 3) {
+            if (Math.abs(leftOrRight - e.clientX) < 4) {
                 jqDiv.css("cursor", "e-resize");
                 return true;
             } else {
@@ -348,49 +301,393 @@ BootStrap.Datagrid = {
             }
         }
     },
-    LoadData: function (tableId, setData) {
-        if (!this.DataGridStatus.isFirstLoad) {
-            BootStrap.Pager.ShowGridMaskLayout(); //调用遮罩层
-        }
-        this.DataGridStatus.tableId = tableId;
-        this.ResetDataBeforeLoad();
-        this.UpdateSetData(setData); //更新用户设置的数据
-        this.BeginLoadDataEvent(); //生成列表前的事件
-        this.GenerateTableHtml(); //生成列表table的html
-        this.EndLoadDataEvent(); //列表和分页展示完成后执行的函数
-        this.DataGridStatus.isFirstLoad = false; //最后设置不是第一次加载
-        BootStrap.Pager.HideGridMaskLayout(); //隐藏遮罩层
-    },
-    /*执行之前重置一些数据*/
-    ResetDataBeforeLoad: function () {
-        BootStrap.Datagrid.ChangeGlobalBoxStatus(false); //取消选中，因为缓存  
-        BootStrap.Datagrid.DataGridStatus.checkedBoxIndexColl.length = 0;
-    },
-    UpdateSetData: function (newSetData) {
-        BootStrap.Datagrid.DataGridSetData = $.extend(BootStrap.Datagrid.DataGridSetData, newSetData);
-    },
-    LoadDataBeforeEvent: function () {
-        if (this.DataGridSetData.onBeforeLoad) {//在载入请求数据数据之前触发
-            this.DataGridSetData.onBeforeLoad();
-        }
-    },
-    BeginLoadDataEvent: function () {
-        if (!this.DataGridSetData.url && !this.DataGridSetData.gridData) {
+    Init: function (tableId, setData) {
+        if (tableId.indexOf("#") == -1) {
+            BootStrap.Window.Messager.Alert({ title: "错误", msg: tableId + "格式是错误的，必须是#+id的格式" });
             return;
         }
-        if (this.DataGridStatus.isFirstLoad) {
-            if (this.DataGridSetData.title || this.DataGridSetData.toolbar) {
-                var toolBarContent = $('<div class="datagrid-toolbar"></div>');
-                $(".body-panel-content").before(toolBarContent);
-                if (this.DataGridSetData.title) {
-                    toolBarContent.append("<span class='grid-title'>" + this.DataGridSetData.title + "</span>");
+        this.LoadGridMaskLayout(tableId, setData);
+        if (this.JudegIsFirstLoad(tableId)) {
+            this.FirstLoadAction(tableId);
+        }
+        this.ResetDataBeforeLoad(tableId);
+        this.UpdateSetData(tableId, setData); //更新用户设置的数据
+        this.BeginLoadDataEvent(tableId); //生成列表前的事件
+        this.GenerateTableHtml(tableId); //生成列表table的html
+        this.EndLoadDataEvent(tableId); //列表和分页展示完成后执行的函数   
+        this.EndLoadAction(tableId); //列表加载完成执行的额外操作
+    },
+    LoadGridMaskLayout: function (tId, newSetData) {
+        var msg = this.DataGridSetData.loadMsg;
+        if (newSetData && newSetData.loadMsg) {
+            msg = newSetData.loadMsg;
+        } else {
+            var currGridData = this.GetGridDataById(tId);
+            if (currGridData && currGridData.loadMsg) {
+                msg = currGridData.loadMsg;
+            }
+        }
+        BootStrap.Pager.ShowGridMaskLayout(msg); //调用遮罩层
+    },
+    /*获取tableId，去掉特殊字符：# .（类标记） 等*/
+    GetTableId: function (tId) {
+        return BootStrap.Tools.GetIdNameTrimOther(tId);
+    },
+    /*根据tableId获取其对应的数据*/
+    GetGridDataById: function (tId) {
+        var data = BootStrap.Tools.GetDataByLabel(BootStrap.Datagrid.AllGridDataCache, "label", tId);
+        if (data) return data.gridSetData;
+        return null;
+    },
+    /*是否是第一次加载，true:是；false:否*/
+    JudegIsFirstLoad: function (tId) {
+        var gdCache = BootStrap.Datagrid.AllGridDataCache;
+        for (var i in gdCache) {
+            if (gdCache[i].label == tId) {//存在说明不是第一次加载
+                return false;
+            }
+        }
+        return true;
+    },
+    /*列表第一次初始化执行的方法*/
+    FirstLoadAction: function (tId) {
+        var grids = BootStrap.Datagrid;
+        var tools = BootStrap.Tools;
+        grids.AllGridDataCache.push({//缓存的数据
+            label: tId,
+            gridSetData: tools.Clone(grids.DataGridSetData)
+        });
+        var currGrid = this.GetGridDataById(tId);
+        currGrid.tableId = tId;
+        currGrid.checkAllId = BootStrap.Tools.GetIdNameTrimOther(tId) + "_ck_all"; //设置全选的checkbox的ID
+
+    },
+    /*列表加载完成执行的方法*/
+    EndLoadAction: function (tId) {
+        var currGridData = this.GetGridDataById(tId);
+        if (currGridData.isFirstLoad) {//第一次加载就执行
+            $(tId).css("display", "none"); //隐藏table
+            BootStrap.InitPage.Init(tId); //设置大小
+        }
+        currGridData.isFirstLoad = false; //最后设置不是第一次加载
+        var hideTime = 100;
+        if (currGridData.pageSize >= 50) {
+            hideTime = 500;
+        }
+        var tempT = setTimeout(function () {
+            BootStrap.Pager.HideGridMaskLayout(); //隐藏遮罩层
+            clearTimeout(tempT);
+        }, hideTime);
+    },
+    /*执行之前重置一些数据*/
+    ResetDataBeforeLoad: function (tId) {
+        var currGridData = this.GetGridDataById(tId);
+        BootStrap.Datagrid.ChangeGlobalBoxStatus(tId, false); //取消选中，因为缓存  
+        currGridData.checkedBoxIndexColl.length = 0;
+    },
+    UpdateSetData: function (tId, newSetData) {
+        var currGridData = this.GetGridDataById(tId);
+        currGridData = $.extend(currGridData, newSetData);
+    },
+    LoadDataBeforeEvent: function (tId) {
+        var currGridData = this.GetGridDataById(tId);
+        if (currGridData.onBeforeLoad) {//在载入请求数据数据之前触发
+            currGridData.onBeforeLoad();
+        }
+    },
+    BeginLoadDataEvent: function (tId) {
+        var currGridData = this.GetGridDataById(tId);
+        if (!currGridData.url && !currGridData.gridData) {
+            return;
+        }
+        this.LoadDataBeforeEvent(tId);
+        this.GetGridDataByUrlOrLocal(tId);
+    },
+    /*获取远程或者本地数据*/
+    GetGridDataByUrlOrLocal: function (tId) {
+        var currGridData = this.GetGridDataById(tId);
+        if (!currGridData.queryParams) {
+            currGridData.queryParams = {};
+        }
+        currGridData.queryParams.pageIndex = currGridData.pageIndex;
+        currGridData.queryParams.pageSize = currGridData.pageSize;
+        var gridSetData = currGridData;
+        if (gridSetData.url) {
+            $.ajax({
+                url: gridSetData.url,
+                type: gridSetData.method,
+                async: false,
+                data: gridSetData.queryParams,
+                success: function (data) {
+                    if (currGridData.loadFilter) { //过滤数据
+                        if (data && data.total > 0) {
+                            data = currGridData.loadFilter(data);
+                        }
+                    }
+                    currGridData.data = data;
+                },
+                error: function () {
+                    if (currGridData.onLoadError) {
+                        currGridData.onLoadError();
+                    }
                 }
-                if (this.DataGridSetData.toolbar) {//第一次加载要生成toolbar
-                    if (typeof this.DataGridSetData.toolbar == "string") {
-                        toolBarContent.prepend($(this.DataGridSetData.toolbar).remove());
+            });
+        } else {
+            var rows = gridSetData.gridData.rows;
+            if (gridSetData.gridData && rows) {
+                currGridData.data = { total: gridSetData.gridData.total, rows: [] };
+                var begin = (gridSetData.pageIndex - 1) * gridSetData.pageSize;
+                var end = begin + gridSetData.pageSize;
+                for (var i = begin; i < end; i++) {
+                    currGridData.data.rows.push(rows[i]);
+                }
+            }
+
+        }
+    },
+    /*生成html数据*/
+    GenerateTableHtml: function (tId) {
+        var currGridData = this.GetGridDataById(tId);
+
+        if (currGridData.isFirstLoad) {
+            this.AddGridBody(tId); //表头和列表的框架
+        }
+        this.GenerateGridHtml(tId);
+        if (currGridData.isFirstLoad) {
+            //table.addClass(tId + "_body_panel").find("table").css({ "border-bottom": "1px solid #ddd", "border-right": "1px solid #ddd" });
+        }
+        if (currGridData.pagination) {
+            BootStrap.Pager.SetPageHtmlAjax(tId, {
+                pageIndex: currGridData.pageIndex,
+                pageSize: currGridData.pageSize,
+                pageTotalCount: currGridData.data.total,
+                hrefUrl: currGridData.url,
+                pageList: currGridData.pageList,
+                pageEvent: null,
+                eventData: null
+            });
+        }
+
+    },
+    /*生成冻结列表头html*/
+    LoadFrozenHead: function (currGridData) {
+        var headTemplate = '<thead><tr class="datagrid-header">%1</tr></thead>';
+        var headTd = '<th field="%3" class="table-common-th %1" style="padding:0;"><div class="datagrid-cell-nowrap table-th-div body-cell-div-height %1" style="padding:0;">%2</div></th>';
+        var tId = currGridData.tableId;
+        var headHtml = [];
+        var colunmData = currGridData.frozenColumns;
+        if (colunmData && colunmData.length > 0) {
+            var rownumberData = this.GetRownumberData(tId);
+            headHtml.push('<th class="table-rownumbers-thtd" style="padding:0px;width:' + rownumberData.widthPx + 'px;"><div class="body-cell-div-height" style="padding:0;margin:0;left:0;right:0;width:' + (rownumberData.widthPx - 6) + 'px;">&nbsp;</div></th>');
+            if (currGridData.checkbox) {
+                headHtml.push('<th class="table-first-thtd" style="padding:0;"><input type="checkbox" id="' + currGridData.checkAllId + '" class="group-checkable" /></th>');
+            }
+            var allWidth = 0; //总宽度
+            $.each(colunmData[0], function (i, d) {
+                var className = "grid_cell_" + d.field;
+                var _tempW = d.width ? d.width : 80;
+                allWidth += _tempW;
+                //var width = "width:" + _tempW + "px;";
+                headHtml.push(String.format(headTd, className, d.title, d.field));
+            });
+            allWidth = allWidth + 20 + parseInt(rownumberData.widthPx); //前面两列的宽度
+            if (!currGridData.columns || currGridData.columns.length < 1) {//没有常规列的时候才创建填充th                
+                headHtml.push(this.GetHeadLastTh(allWidth, (tId + "_body_panel"))); //最后一个th填充
+            }
+            headTemplate = String.format(headTemplate, headHtml.join(" ")); //得到冻结列的表头
+            //设置左边的冻结列宽度
+            $(tId + "_lview," + tId + "_lh_t," + tId + "_lbody").css("width", allWidth + "px");
+
+        }
+        return headTemplate;
+    },
+    /*生成非冻结列表头html*/
+    LoadGeneralHead: function (currGridData) {
+        var tId = currGridData.tableId;
+        var headTemplate = '<thead><tr class="datagrid-header">%1</tr></thead>';
+        var headTd = '<th field="%3" class="table-common-th %1" style="padding:0;"><div class="datagrid-cell-nowrap table-th-div body-cell-div-height %1" style="padding:0;">%2</div></th>';
+        var headHtml = [];
+        var colunmData = currGridData.columns;
+        if (colunmData && colunmData.length > 0) {
+            if (!currGridData.frozenColumns || currGridData.frozenColumns.length < 1) {
+                var rownumberData = this.GetRownumberData(tId);
+                headHtml.push('<th class="table-rownumbers-thtd" style="padding:0px;width:' + rownumberData.widthPx + 'px;"><div class="body-cell-div-height" style="padding:0;width:' + (rownumberData.widthPx - 6) + 'px;">&nbsp;</div></th>');
+                if (currGridData.checkbox) {
+                    headHtml.push('<th class="table-first-thtd" style="padding:0;"><input type="checkbox" id="' + currGridData.checkAllId + '" class="group-checkable" /></th>');
+                }
+            }
+            var allWidth = 0; //总宽度
+            $.each(colunmData[0], function (i, d) {
+                var className = "grid_cell_" + d.field;
+                var _tempW = d.width ? d.width : 80;
+                allWidth += _tempW;
+                //var width = "width:" + _tempW + "px;";
+                headHtml.push(String.format(headTd, className, d.title, d.field));
+            });
+            headHtml.push(this.GetHeadLastTh(allWidth, (tId + "_rview"))); //最后一个td是填充作用
+            headTemplate = String.format(headTemplate, headHtml.join(" ")); //得到冻结列的表头
+            var panelW = $(tId + "_body_panel").width();
+            var rightW = panelW;
+            if (currGridData.frozenColumns && currGridData.frozenColumns.length > 0) {//如果有冻结列，要减去左边的宽度
+                var leftW = $(tId + "_lbody").width();
+                rightW = panelW - leftW;
+            }
+            $(tId + "_rview," + tId + "_rbody," + tId + "_rh_div").css("width", rightW + "px"); //设置左边的冻结列宽度
+        }
+        return headTemplate;
+    },
+    /*获取表头最后一个th*/
+    GetHeadLastTh: function (allWidth, panelId) {
+        var lastThW = "";
+        var panelWidth = $(panelId).width(); //grid最外层div的总宽度
+        if (allWidth < panelWidth) {//如果总宽度小于800
+            lastThW = "width:" + (Math.ceil((panelWidth - allWidth) / panelWidth * 100)) + "%;";
+        }
+        return ('<th class="table-last-thtd" style="border-top:0;' + lastThW + '"><div class="datagrid-cell">&nbsp;</div></th>'); //最后一个td是填充作用
+    },
+    /*创建各个列宽度的样式类*/
+    CreateWidthStyle: function (currGridData) {
+        var style = "";
+        var funGetStyle = function (data) {
+            var _sty = "";
+            if (data && data.length > 0) {
+                $.each(data[0], function (i, d) {
+                    _sty += ".grid_cell_" + d.field + "{width:" + (d.width ? d.width : 80) + "px;} ";
+                });
+            }
+            return _sty;
+        };
+        style += funGetStyle(currGridData.frozenColumns);
+        style += funGetStyle(currGridData.columns);
+        BootStrap.Tools.CreateStyle2(style); //创建样式
+    },
+    GetFrozenColumnsHtml: function (tId) {
+
+    },
+    /*生成非冻结列*/
+    GetColumnsHtmlByData: function (currGridData, colData, isFrozen) {
+        var bodyTrHtml = [];
+        var tds = [];
+        if (currGridData.data && currGridData.data.rows) {
+            var getAlign = function (val) {
+                if (val) {
+                    return "text-align:" + val + ";";
+                } else {
+                    return "text-align:left;";
+                }
+            };
+            var rownumberData = this.GetRownumberData(currGridData.tableId); //获取rownumber的数据
+            $.each(currGridData.data.rows, function (index, data) {
+                tds.length = 0;
+                var hasRowNum = false;
+                if (isFrozen) {
+                    hasRowNum = true;
+                } else {
+                    if (!currGridData.frozenColumns || currGridData.frozenColumns.length < 1) {
+                        hasRowNum = true;
+                    }
+                }
+                if (hasRowNum) {
+                    tds.push('<td class="table-rownumbers-thtd" style="padding:0;width:' + (rownumberData.widthPx) + 'px;">' + (rownumberData.hasNumber ? String(++rownumberData.beginIndex) : "") + '</td>');
+                    if (currGridData.checkbox) {
+                        tds.push('<td class="table-first-thtd" style="padding:0;"><input type="checkbox" id="cb_row_' + index + '" class="group-checkable" /></td>');
+                    }
+                }
+                $.each(colData[0], function (i, d) {
+                    var className = "grid_cell_" + d.field;
+                    var nowrapClass = currGridData.nowrap ? "datagrid-cell-nowrap" : "";
+                    var tText = data[d.field];
+                    if (d.formatter) {
+                        tText = d.formatter(tText, data, index);
+                    }
+                    !(tText != "0" && !tText) || (tText = "");
+                    tds.push("<td  class='datagrid-body-cell" + " " + className + "' style='" + getAlign(d.align) + ";padding:0;'  field='" + d.field + "'><div style='height:auto;' class='datagrid-cell body-cell-div-height" + " " + nowrapClass + " " + className + "'>" + tText + "</div></td>");
+                    //tds.push("<td  class='datagrid-body-cell"  + " " + className + "' style='" + getAlign(d.align) + "'  field='" + d.field + "'>" +'<div style="height:auto;" class="datagrid-cell'+ " " + nowrapClass+'">' + tText + '</div>' + "</td>");*/
+                });
+                if (!isFrozen) {
+                    tds.push("<td class='datagrid-body-cell table-last-thtd' style='padding:0;'>&nbsp;</td>");
+                }
+                var _rowSytle = "";
+                if (typeof currGridData.rowStyler == "function") {
+                    _rowSytle = currGridData.rowStyler(index, data);
+                    _rowSytle = _rowSytle ? " style='" + _rowSytle + "'" : "";
+                }
+                var trDefClass = index % 2 != 0 ? " class='datagrid-tr-even' " : ""; //隔行变色
+                bodyTrHtml.push("<tr" + _rowSytle + trDefClass + " dataIndex='" + index + "'>" + tds.join(" ") + "</tr>");
+            });
+        }
+        return "<tbody>" + bodyTrHtml.join(" ") + "</tbody>";
+    },
+    /*创建列表区域*/
+    AddGridBody: function (tId) {
+        //#region html
+        var bodyHtml = '\
+<div class="row-fluid" id="%1_body_all"><div id="%1_body_panel" class="datagrid-view" style="%2">%3</div></div>';
+        var frozenHtml = '\
+<div id="%1_lview" class="datagrid-view1" style="width:%2px;display:%3">\
+    <div id="%1_lh_div" class="datagrid-header" style="height:35px;float: left;width: 10000px;display: block;"><table id="%1_lh_t" class="table table-striped table-bordered table-condensed" border="0" cellspacing="0" cellpadding="0" style="table-layout:fixed;height:34px;float:left;"><tbody></tbody></table></div>\
+    <div class="datagrid-body" id="%1_lbody" style="margin-top: 0px; height: 196px;overflow:hidden;">\
+        <div class="datagrid-body-inner">\
+            <table id="%1_ldg" class="table table-striped table-bordered table-condensed" cellspacing="0" cellpadding="0" border="0" style="table-layout:fixed;border:none;"><tbody></tbody></table>\
+        </div>\
+    </div>\
+</div>';
+        var genHtml = '\
+<div id="%1_rview" class="datagrid-view2" style="width:%2px;display:%3">\
+    <div id="%1_rh_div" class="datagrid-header" style="height:35px;float: left;width: 10000px;display: block;"><table id="%1_rh_t"  class="table table-striped table-bordered table-condensed" border="0" cellspacing="0" cellpadding="0" style="table-layout:fixed;height:34px;margin:0px;"><tbody></tbody></table></div>\
+    <div class="datagrid-body"  id="%1_rbody"  style="width: 425px; margin-top: 0px; height: 197px;">\
+        <table id="%1_rdg" class="table table-striped table-bordered table-condensed"  cellspacing="0" cellpadding="0" border="0" style="table-layout:fixed;border:none;"><tbody></tbody></table>\
+    </div>\
+</div>';
+        //#endregion
+        var currGridData = this.GetGridDataById(tId);
+        var table = $(tId);
+        var setSty = table.attr("style");
+        var css = setSty ? setSty : "width:100%;";
+        if (css.indexOf("width") == -1) css += ";width:100%;";
+        var frozenData = currGridData.frozenColumns,
+            generalData = currGridData.columns;
+        var hasFroCol = frozenData && frozenData.length > 0; //是否有冻结列
+        var hasGenCol = generalData && generalData.length > 0; //是否有常规列
+        var content = ""; //body_panel的内容
+        var _tId = BootStrap.Tools.GetIdNameTrimOther(currGridData.tableId); //去掉前面的#
+        var funGetWidth = function (_data) {
+            var w = 0;
+            $.each(_data, function () {
+                w += this.width;
+            });
+            return w;
+        };
+        if (hasFroCol) {
+            var froW = funGetWidth(frozenData[0]);
+            content += String.format(frozenHtml, _tId, froW, (hasFroCol ? "block" : "none"));
+        }
+        if (hasGenCol) {
+            var genW = funGetWidth(generalData[0]);
+            content += String.format(genHtml, _tId, genW, (hasGenCol ? "block" : "none"));
+        }
+        var $bodyPanel = $(String.format(bodyHtml, _tId, css, content));
+        table.before($bodyPanel);
+        //$bodyPanel.find("table").css({ "border-bottom": "1px solid #ddd", "border-right": "1px solid #ddd" });
+
+        this.CreateToolBar(currGridData); //创建toolbar
+    },
+    /*创建ToolBar*/
+    CreateToolBar: function (currGridData) {
+        if (currGridData.isFirstLoad) {
+            if (currGridData.title || currGridData.toolbar) {
+                var _tId = BootStrap.Tools.GetIdNameTrimOther(currGridData.tableId);
+                var toolBarContent = $('<div class="datagrid-toolbar" id="' + _tId + '_toolbar"></div>');
+                $("#" + _tId + "_body_panel").before(toolBarContent);
+                if (currGridData.title) {
+                    toolBarContent.append("<span class='grid-title'>" + currGridData.title + "</span>");
+                }
+                if (currGridData.toolbar) {//第一次加载要生成toolbar
+                    if (typeof currGridData.toolbar == "string") {
+                        toolBarContent.prepend($(currGridData.toolbar).remove());
                     } else {
                         var toolBarHtml = '<a class="btn red toolbar-margin" href="javascript:;"><i class="%1 icon-black"></i>%2</a>';
-                        $.each(this.DataGridSetData.toolbar, function () {
+                        $.each(currGridData.toolbar, function () {
                             var thisBar = this;
                             var _bar = $(String.format(toolBarHtml, thisBar.iconCls, thisBar.text));
                             toolBarContent.append(_bar);
@@ -403,315 +700,452 @@ BootStrap.Datagrid = {
             }
 
         }
-        this.GetGridDataByUrlOrLocal();
     },
-    GetGridDataByUrlOrLocal: function () {
-        if (!BootStrap.Datagrid.DataGridSetData.queryParams) {
-            BootStrap.Datagrid.DataGridSetData.queryParams = {};
+    GenerateGridHtml: function (tId) {
+        var currGridData = this.GetGridDataById(tId);
+        //生成冻结列表头
+        this.CreateFrozenHeader(currGridData);
+        //生成非冻结列的表头
+        this.CreateGeneralHeader(currGridData);
+        //创建各列的宽度样式类
+        this.CreateWidthStyle(currGridData);
+        var froConHtml = "", geneConHtml = "";
+        //生成冻结列的数据
+        if (currGridData.frozenColumns && currGridData.frozenColumns.length > 0) {
+            froConHtml = this.GetColumnsHtmlByData(currGridData, currGridData.frozenColumns, true);
         }
-        BootStrap.Datagrid.DataGridSetData.queryParams.pageIndex = this.DataGridSetData.pageIndex;
-        BootStrap.Datagrid.DataGridSetData.queryParams.pageSize = this.DataGridSetData.pageSize;
+        //生成非冻结列的数据
+        if (currGridData.columns && currGridData.columns.length > 0) {
+            geneConHtml = this.GetColumnsHtmlByData(currGridData, currGridData.columns, false);
+        }
+        var froDg = $(tId + "_ldg");
+        var geneDg = $(tId + "_rdg");
+        if (froConHtml) froDg.html(froConHtml); //左边grid
+        if (geneConHtml) geneDg.html(geneConHtml); //右边grid
 
-        var gridSetData = BootStrap.Datagrid.DataGridSetData;
-        if (gridSetData.url) {
-            $.ajax({
-                url: gridSetData.url,
-                type: gridSetData.method,
-                async: false,
-                data: gridSetData.queryParams,
-                success: function (data) {
-                    if (BootStrap.Datagrid.DataGridSetData.loadFilter) { //过滤数据
-                        if (data && data.total > 0) {
-                            data = BootStrap.Datagrid.DataGridSetData.loadFilter(data);
-                        }
-                    }
-                    BootStrap.Datagrid.DataGridSetData.data = data;
-                },
-                error: function () {
-                    if (BootStrap.Datagrid.DataGridSetData.onLoadError) {
-                        BootStrap.Datagrid.DataGridSetData.onLoadError();
-                    }
-                }
-            });
-        } else {
-            if (gridSetData.gridData && gridSetData.gridData.rows) {
-                BootStrap.Datagrid.DataGridSetData.data = { total: gridSetData.gridData.total, rows: [] };
-                var begin = (gridSetData.pageIndex - 1) * gridSetData.pageSize;
-                var end = begin + gridSetData.pageSize;
-                for (var rows = gridSetData.gridData.rows, i = begin; i < end; i++) {
-                    BootStrap.Datagrid.DataGridSetData.data.rows.push(gridSetData.gridData.rows[i]);
-                }
-            }
-
+    },
+    /*创建冻结列表头*/
+    CreateFrozenHeader: function (currGridData) {
+        if (currGridData.frozenColumns && currGridData.frozenColumns.length > 0) {
+            var frozenHeadHtml = this.LoadFrozenHead(currGridData);
+            $(currGridData.tableId + "_lh_t").html(frozenHeadHtml);
         }
     },
-    EndLoadDataEvent: function () {
+    /*创建非冻结列表头*/
+    CreateGeneralHeader: function (currGridData) {
+        if (currGridData.columns && currGridData.columns.length > 0) {
+            var generalHeadHtml = this.LoadGeneralHead(currGridData);
+            $(currGridData.tableId + "_rh_t").html(generalHeadHtml);
+        }
+    },
+    /*获取rownumber的数据*/
+    GetRownumberData: function (tId) {
+        var currGridData = this.GetGridDataById(tId);
+        var beginIndex = (currGridData.pageIndex - 1) * currGridData.pageSize;
+        var hasNumber = currGridData.rownumbers;
+        var widthPx = "20"; //根据数字的位数确定rownumber列的宽度
+        if (hasNumber) {
+            var max = beginIndex + currGridData.pageSize;
+            widthPx = (6 * String(max).length); //每个数字宽度为6像素
+        }
+        return { beginIndex: beginIndex, hasNumber: hasNumber, widthPx: widthPx };
+    },
+    EndLoadDataEvent: function (tId) {
+        var currGridData = this.GetGridDataById(tId);
         //如果超过页数，就回跳到最后一页
-        if (this.DataGridSetData.data.total > 0 && this.DataGridSetData.pageIndex > 1 && (!this.DataGridSetData.data.rows || this.DataGridSetData.data.rows.length < 1)) {
-            var realPage = BootStrap.Pager.GetRealPages(this.DataGridSetData.data.total, this.DataGridSetData.pageSize); //获取实际页数
-            this.LoadData(this.DataGridStatus.tableId, { pageIndex: realPage });
+        if (currGridData.data.total > 0 && currGridData.pageIndex > 1 && (!currGridData.data.rows || currGridData.data.rows.length < 1)) {
+            var realPage = BootStrap.Pager.GetRealPages(currGridData.data.total, currGridData.pageSize); //获取实际页数
+            currGridData.pageIndex = realPage;
+            this.Init(tId, {});
         }
-        BootStrap.Datagrid.DragTableColumn.Init(BootStrap.Datagrid.DataGridStatus.tableId);
-        if (typeof this.DataGridSetData.onLoadSuccess == "function") {
-            this.DataGridSetData.onLoadSuccess(BootStrap.Datagrid.DataGridSetData.data);
+        this.BindScrollEvent(tId);
+        BootStrap.Datagrid.DragTableColumn.Init(tId);
+        if (typeof currGridData.onLoadSuccess == "function") {
+            currGridData.onLoadSuccess(currGridData.data);
         }
-        $("#" + BootStrap.Datagrid.DataGridStatus.tableId + " tr:gt(0)").each(function (trIndex) {
-            var _tr = $(this);
-            if (BootStrap.Datagrid.DataGridSetData.onDblClickRow) {
-                _tr.dblclick(function () {
-                    BootStrap.Datagrid.DataGridSetData.onDblClickRow(trIndex, BootStrap.Datagrid.DataGridSetData.data.rows[trIndex]);
-                });
-            }
-            if (BootStrap.Datagrid.DataGridSetData.onClickRow) {//单击行事件
-                _tr.click(function () {
-                    BootStrap.Datagrid.DataGridSetData.onClickRow(trIndex, BootStrap.Datagrid.DataGridSetData.data.rows[trIndex]);
-                });
-            }
-            var _rowTds = _tr.children("td");
-            _rowTds.click(function (e) {
-                BootStrap.Tools.StopBubble(e); //阻止事件冒泡
-                //先执行默认的颜色变化事件
-                BootStrap.Datagrid.TrToggleClass(trIndex, _tr); //先改变行颜色，再判断时候有selectOnCheck事件
-                if (BootStrap.Datagrid.DataGridSetData.checkbox) {//如果有checkbox
-                    if (BootStrap.Datagrid.DataGridSetData.selectOnCheck) {
-                        BootStrap.Datagrid.JudgeClickCheckBox(_tr);
-                    }
-                }
-                if (BootStrap.Datagrid.DataGridSetData.onClickCell) {//点击一个单元格的时候触发
-                    var field = $(this).attr("field");
-                    BootStrap.Datagrid.DataGridSetData.onClickCell(trIndex, field, BootStrap.Datagrid.DataGridSetData.data.rows[trIndex][field]);
-                }
-
-            });
-            if (BootStrap.Datagrid.DataGridSetData.onDblClickCell) {//双击一个单元格的时候触发
-                _rowTds.dblclick(function () {
-                    var field = $(this).attr("field");
-                    if (field) {
-                        BootStrap.Datagrid.DataGridSetData.onDblClickCell(trIndex, field, BootStrap.Datagrid.DataGridSetData.data.rows[trIndex][field]);
-                    }
-                });
-            }
-            _tr.find("input:first").click(function (e) {
-                BootStrap.Tools.StopBubble(e); //阻止事件冒泡
-                var isChecked;
-                if (BootStrap.Datagrid.DataGridStatus.isJqClickCheckBox.isJqClick) {//如果是jQuery点击
-                    isChecked = BootStrap.Datagrid.DataGridStatus.isJqClickCheckBox.value;
-                    BootStrap.Datagrid.DataGridStatus.isJqClickCheckBox.isJqClick = false;
-                }
-                else {
-                    isChecked = $(this).attr("checked");
-                }
-                /*checkOnSelect如果为true，当用户点击行的时候该复选框就会被选中或取消选中*/
-                if (BootStrap.Datagrid.DataGridSetData.checkbox && BootStrap.Datagrid.DataGridSetData.checkOnSelect) {
-                    if (!BootStrap.Datagrid.DataGridSetData.selectOnCheck) {
-                        BootStrap.Datagrid.TrToggleClass2(isChecked, _tr);
+        this.BindFrozenDGEvent(tId, currGridData); //绑定左边的datagrid的事件
+        this.BindGeneralDGEvent(tId, currGridData);
+        if (currGridData.checkbox) {//绑定全选事件
+            var ckBoxGlo = $("#" + currGridData.checkAllId);
+            if (currGridData.singleSelect) {
+                ckBoxGlo.attr("disabled", true);
+            } else {
+                ckBoxGlo.click(function (e) {//单击全选checkbox事件
+                    var _e; (_e = event) || (_e = e);
+                    BootStrap.Tools.StopBubble(_e); //阻止事件冒泡
+                    currGridData.isCheckAllEvent = true;
+                    var isCheckAll = $(this).attr("checked"); //获取全选checkbox的状态
+                    currGridData.cacheGlobalBoxStatus = isCheckAll != undefined; //记录是否选中
+                    var ckInTId = currGridData.tableId;
+                    if (currGridData.frozenColumns && currGridData.frozenColumns.length > 0) {
+                        ckInTId += "_ldg";
                     } else {
-                        if (!BootStrap.Datagrid.DataGridStatus.isSelectOnCheckEvent) {//如果是selectOnCheck事件触发点击checkbox，就不需要执行修改行颜色了
-                            if (isChecked) {
-                                BootStrap.Datagrid.AddTrColor2(trIndex, _tr);
-                            } else {
-                                BootStrap.Datagrid.RemoveTrColor2(trIndex, _tr);
-                            }
+                        ckInTId += "_rdg";
+                    }
+                    $(ckInTId + " tr").each(function (i) {
+                        var _cb = $(this).find("input:first");
+                        if (_cb.attr("checked") == isCheckAll) {
+                            return;
                         } else {
-                            BootStrap.Datagrid.DataGridStatus.isSelectOnCheckEvent = false;
+                            if (currGridData.selectOnCheck) {//如果有涉及到checkbox事件就点击
+                                BootStrap.Datagrid.JqClickCheckBox(currGridData.tableId, _cb);
+                            } else {
+                                var isCheck = isCheckAll != undefined;
+                                if (isCheck) {
+                                    if (!currGridData.checkedBoxIndexColl.contains(i)) {
+                                        currGridData.checkedBoxIndexColl.push(i);
+                                    }
+                                } else {
+                                    if (currGridData.checkedBoxIndexColl.contains(i)) {
+                                        currGridData.checkedBoxIndexColl.removeValue(i);
+                                    }
+                                }
+                                _cb.attr("checked", isCheck);
+
+                            }
                         }
+                    });
+                    if (isCheckAll) {//是否全选
+                        BootStrap.Datagrid.CheckAllBox(currGridData.tableId, currGridData.data.rows);
                     }
+                    currGridData.isCheckAllEvent = false;
+                });
+            }
+        }
+
+    },
+    /*绑定冻结列事件*/
+    BindFrozenDGEvent: function (tId, currGridData) {
+        if (currGridData.frozenColumns && currGridData.frozenColumns.length > 0) {
+            $(currGridData.tableId + "_ldg tbody tr").each(function (trIndex) {
+                var _tr = $(this);
+                BootStrap.Datagrid.BandDgTrClickEvent(currGridData, _tr, true);
+                if (currGridData.checkbox) {
+                    BootStrap.Datagrid.BandCheckBoxEvent(currGridData, _tr, trIndex, true);
                 }
-                if (isChecked && BootStrap.Datagrid.DataGridSetData.onCheck) {
-                    BootStrap.Datagrid.DataGridSetData.onCheck(trIndex, BootStrap.Datagrid.DataGridSetData.data.rows[trIndex]);
-                }
-                if (!isChecked && BootStrap.Datagrid.DataGridSetData.onUncheck) {
-                    BootStrap.Datagrid.DataGridSetData.onUncheck(trIndex, BootStrap.Datagrid.DataGridSetData.data.rows[trIndex]);
-                }
-                if (isChecked) {//如果选中，就判断是否已经全选
-                    if (!BootStrap.Datagrid.DataGridStatus.checkedBoxIndexColl.contains(trIndex)) {
-                        BootStrap.Datagrid.DataGridStatus.checkedBoxIndexColl.push(trIndex);
-                    }
-                    //判断是否已经全选
-                    if (BootStrap.Datagrid.DataGridStatus.checkedBoxIndexColl.length == BootStrap.Datagrid.DataGridSetData.data.rows.length) {
-                        BootStrap.Datagrid.ChangeGlobalBoxStatus(true);
-                    }
-                } else {
-                    BootStrap.Datagrid.DataGridStatus.checkedBoxIndexColl.removeValue(trIndex);
-                    //如果觉得获取dom元素的数据耗时，那么就先判断时候勾选过checkbox，勾选过才需要判断取消全选，如果都没有勾选过，就没必要判断是否取消全选
-                    BootStrap.Datagrid.ChangeGlobalBoxStatus(false);
-                    if (BootStrap.Datagrid.DataGridStatus.checkedBoxIndexColl.length < 1) {
-                        BootStrap.Datagrid.UnCheckAllBox(BootStrap.Datagrid.DataGridSetData.data.rows);
-                    }
-                }
+
             });
 
+        }
+    },
+    /*绑定常规列事件*/
+    BindGeneralDGEvent: function (tId, currGridData) {
+        if (currGridData.columns && currGridData.columns.length > 0) {
+            $(currGridData.tableId + "_rdg tbody tr").each(function (trIndex) {
+                var _tr = $(this);
+                BootStrap.Datagrid.BandDgTrClickEvent(currGridData, _tr, false);
+                if (currGridData.checkbox) {
+                    //有冻结列，说明checkbox在冻结列table那里
+                    if (currGridData.frozenColumns && currGridData.frozenColumns.length > 0) return;
+                    BootStrap.Datagrid.BandCheckBoxEvent(currGridData, _tr, trIndex, false);
+                }
+
+            });
+
+        }
+    },
+    /*绑定列表行单击事件*/
+    BandDgTrClickEvent: function (currGridData, _tr, isLeftDg) {
+        _tr.click(function (e) {
+            var _Event; (_Event = event) || (_Event = e);
+            BootStrap.Tools.StopBubble(_Event); //阻止事件冒泡  
+            var trIndex = this.rowIndex;
+            //执行选中行，或者非选中行方法
+            var isAddColor = BootStrap.Datagrid.SelOrUnSelRowAction(currGridData, trIndex, _tr, isLeftDg);
+            if (currGridData.checkbox) {//如果有checkbox
+                if (currGridData.checkOnSelect) {
+                    BootStrap.Datagrid.JudgeClickCheckBox(currGridData.tableId, _tr, isAddColor);
+
+                }
+            }
+            if (currGridData.onClickRow) {//单击行事件
+                currGridData.onClickRow(trIndex, currGridData.data.rows[trIndex]);
+            }
+            if (currGridData.onClickCell) {//点击一个单元格的时候触发
+                var clickTd = _Event.srcElement;
+                if (clickTd.tagName != "TD") {
+                    clickTd = BootStrap.Datagrid.GetClickTDEle(clickTd);
+                    if (!clickTd) return;
+                }
+                var field = clickTd.getAttribute("field");
+                if (field) {//如果没有field，说明不是有数据的td，
+                    currGridData.onClickCell(trIndex, field, currGridData.data.rows[trIndex][field]);
+                }
+            }
         });
-        if (this.DataGridSetData.checkbox) {
-            $("#" + this.DataGridStatus.checkAllId).click(function () {//单击全选checkbox事件
-                BootStrap.Datagrid.DataGridStatus.isCheckAllEvent = true;
-                var isCheckAll = $(this).attr("checked"); //获取全选checkbox的状态
-                BootStrap.Datagrid.DataGridStatus.cacheGlobalBoxStatus = isCheckAll != undefined; //记录是否选中
-                $("#" + BootStrap.Datagrid.DataGridStatus.tableId + " tr:gt(0)").each(function (i) {
-                    var _cb = $(this).find("input:first");
-                    if (_cb.attr("checked") == isCheckAll) {
-                        return;
-                    } else {
-                        if (BootStrap.Datagrid.DataGridSetData.checkOnSelect) {//如果有涉及到checkbox事件就点击
-                            BootStrap.Datagrid.JqClickCheckBox(_cb);
-                        } else {
-                            var isCheck = isCheckAll != undefined;
-                            if (isCheck) {
-                                if (!BootStrap.Datagrid.DataGridStatus.checkedBoxIndexColl.contains(i)) {
-                                    BootStrap.Datagrid.DataGridStatus.checkedBoxIndexColl.push(i);
-                                }
-                            } else {
-                                if (BootStrap.Datagrid.DataGridStatus.checkedBoxIndexColl.contains(i)) {
-                                    BootStrap.Datagrid.DataGridStatus.checkedBoxIndexColl.removeValue(i);
-                                }
-                            }
-                            _cb.attr("checked", isCheck);
-
-                        }
-                    }
-                });
-                if (isCheckAll) {//是否全选
-                    BootStrap.Datagrid.CheckAllBox(BootStrap.Datagrid.DataGridSetData.data.rows);
-                }
-                BootStrap.Datagrid.DataGridStatus.isCheckAllEvent = false;
-            });
+    },
+    /*执行选中行，或者非选中行方法*/
+    SelOrUnSelRowAction: function (currGridData, trIndex, _tr, isLeftDg) {
+        //先执行默认的颜色变化事件,如果isAddColor为true，说明是需要选中checkbox，否则取消选中        
+        var isAddColor = BootStrap.Datagrid.TrToggleClass(currGridData.tableId, trIndex, _tr); //先改变行颜色，再判断时候有selectOnCheck事件
+        this.ChangeOterDgSelStatus(currGridData, isAddColor, trIndex, isLeftDg);
+        return isAddColor;
+    },
+    /*改变另一个datagrid的行样式，不需要出发任何事件*/
+    ChangeOterDgSelStatus: function (currGridData, isAddColor, trIndex, isLeftDg) {
+        var hasData = (isLeftDg ? (currGridData.columns && currGridData.columns.length > 0) : (currGridData.frozenColumns && currGridData.frozenColumns.length > 0));
+        if (hasData) {
+            //如果性能很差，那么就通过坐标来获取元素
+            var clickTr = $(currGridData.tableId + (isLeftDg ? "_rdg" : "_ldg"))[0].rows[trIndex];
+            if (isAddColor) {
+                BootStrap.Datagrid.AddTrColor3($(clickTr));
+            } else {
+                BootStrap.Datagrid.RemoveTrColor3($(clickTr));
+            }
         }
+    },
+    /*绑定checkbox事件*/
+    BandCheckBoxEvent: function (currGridData, _tr, trIndex, isLeftDg) {
+        _tr.find("input:first").click(function (e) {
+            BootStrap.Tools.StopBubble(e); //阻止事件冒泡
+            var tId = currGridData.tableId;
+            var isChecked;
+            if (currGridData.isJqClickCheckBox.isJqClick) {//如果是jQuery点击
+                isChecked = currGridData.isJqClickCheckBox.value;
+                currGridData.isJqClickCheckBox.isJqClick = false;
+            }
+            else {
+                isChecked = $(this).attr("checked");
+            }
+            /*selectOnCheck如果为true，当用户点击复选框就会改变行的颜色*/
+            if (currGridData.selectOnCheck) {
+                if (!currGridData.checkOnSelect) {
+                    BootStrap.Datagrid.TrToggleClass3(currGridData.tableId, isChecked, trIndex, _tr);
+                    BootStrap.Datagrid.ChangeOterDgSelStatus(currGridData, isChecked, trIndex, isLeftDg);
+                } else {
+                    if (!currGridData.isCheckOnSelectEvent) {//如果是checkOnSelect事件触发点击checkbox，就不需要执行修改行颜色了
+                        BootStrap.Datagrid.SelOrUnSelRowAction(currGridData, trIndex, _tr, isLeftDg);
+                    } else {
+                        currGridData.isCheckOnSelectEvent = false;
+                    }
+                }
+            }
+            if (isChecked && currGridData.onCheck) {
+                currGridData.onCheck(trIndex, currGridData.data.rows[trIndex]);
+            }
+            if (!isChecked && currGridData.onUncheck) {
+                currGridData.onUncheck(trIndex, currGridData.data.rows[trIndex]);
+            }
+            if (isChecked) {//如果选中，就判断是否已经全选
+                if (!currGridData.checkedBoxIndexColl.contains(trIndex)) {
+                    currGridData.checkedBoxIndexColl.push(trIndex);
+                }
+                //判断是否已经全选
+                if (currGridData.checkedBoxIndexColl.length == currGridData.data.rows.length) {
+                    BootStrap.Datagrid.ChangeGlobalBoxStatus(tId, true);
+                }
+            } else {
+                currGridData.checkedBoxIndexColl.removeValue(trIndex);
+                //如果觉得获取dom元素的数据耗时，那么就先判断时候勾选过checkbox，勾选过才需要判断取消全选，如果都没有勾选过，就没必要判断是否取消全选
+                BootStrap.Datagrid.ChangeGlobalBoxStatus(tId, false);
+                if (currGridData.checkedBoxIndexColl.length < 1) {
+                    BootStrap.Datagrid.UnCheckAllBox(currGridData.tableId, currGridData.data.rows);
+                }
+            }
+        });
+    },
+    /*获取点击的td*/
+    GetClickTDEle: function (parentEle) {
+        if (parentEle.tagName == "TR") {
+            return null;
+        }
+        if (parentEle.tagName != "TD") {
+            return this.GetClickTDEle(parentEle.parentElement);
+        }
+        return parentEle;
+    },
+    BindScrollEvent: function (tId) {
+        var scoT = 0, scoL = 0;
+        var lbody = $(tId + "_lbody");
+        var rhDiv = $(tId + "_rh_div");
+        $(tId + "_rbody").scroll(function () {
+            var scrollH = $(this).scrollTop();
+            var scrollT = $(this).scrollLeft();
+            if (scrollH != scoT) {
+                lbody.scrollTop(scrollH);
+                scoT = scrollH;
+            }
+            if (scrollT != scoL) {
+                rhDiv.scrollLeft(scrollT);
+                scoL = scrollT;
+            }
+        });
     },
     //#region 选中行（单击行就代表选中或取消选中），并修改行的颜色
     /*获取行索引，从0开始*/
-    GetRowIndex: function (jqTr) {
+    GetRowIndex: function (tId, jqTr) {
         return parseInt(jqTr.attr("dataIndex"));
+    },
+    /*直接修改颜色：返回true代表做了增加样式操作，false代表不做任何操纵*/
+    AddTrColor3: function (jqTr) {
+        if (!jqTr.hasClass("info")) {
+            jqTr.addClass("info");
+            return true;
+        }
+        return false;
     },
     /**
     * 增加行的颜色
     * @param {Number} index，行索引
     * @param {JqueryObject} jqTr，行tr的jQuery对象
     */
-    AddTrColor2: function (index, jqTr) {
-        if (!this.DataGridStatus.selectTrIndexColl.contains(index)) {
-            this.DataGridStatus.selectTrIndexColl.push(index);
+    AddTrColor2: function (tId, index, jqTr) {
+        var currGridData = this.GetGridDataById(tId);
+        if (!currGridData.selectTrIndexColl.contains(index)) {
+            currGridData.selectTrIndexColl.push(index);
         }
-        var hasClass = jqTr.hasClass("info");
+        var hasClass = this.AddTrColor3(jqTr);
         if (!hasClass) {
-            jqTr.addClass("info");
-            if (this.DataGridSetData.onSelect) {//如果已经存在info样式，说明已经触发过onSelect，所以，开始不存在info样式，才需要触发onSelect事件
-                this.DataGridSetData.onSelect(index, BootStrap.Datagrid.DataGridSetData.data.rows[index]);
-                if (this.DataGridSetData.onSelectAll) {
-                    if (this.DataGridStatus.selectTrIndexColl.length == this.DataGridSetData.data.rows.length) {//判断时候全选
-                        this.DataGridSetData.onSelectAll(this.DataGridSetData.data.rows);
+            if (currGridData.onSelect) {//如果已经存在info样式，说明已经触发过onSelect，所以，开始不存在info样式，才需要触发onSelect事件
+                currGridData.onSelect(index, currGridData.data.rows[index]);
+                if (currGridData.onSelectAll) {
+                    if (currGridData.selectTrIndexColl.length == currGridData.data.rows.length) {//判断时候全选
+                        currGridData.onSelectAll(currGridData.data.rows);
                     }
                 }
             }
         }
-        if (!this.DataGridStatus.isCheckAllEvent && this.DataGridSetData.singleSelect) {
+        if (!currGridData.isCheckAllEvent && currGridData.singleSelect) {
+            var dgId = jqTr.parent().parent().attr("id");
+            var isLeftDg = dgId.indexOf("_ldg") > -1;
+            var hasData = (isLeftDg ? (currGridData.columns && currGridData.columns.length > 0) : (currGridData.frozenColumns && currGridData.frozenColumns.length > 0));
             jqTr.siblings().each(function () {
-                BootStrap.Datagrid.RemoveTrColor($(this));
+                var rIndex = this.rowIndex;
+                if (currGridData.selectTrIndexColl.contains(rIndex)) {
+                    BootStrap.Datagrid.RemoveTrColor2(currGridData.tableId, rIndex, $(this));
+                    if (hasData) {
+                        var clickTr = $(currGridData.tableId + (isLeftDg ? "_rdg" : "_ldg"))[0].rows[rIndex];
+                        BootStrap.Datagrid.RemoveTrColor3($(clickTr));
+                    }
+
+                }
             });
         }
     },
     /*增加行的颜色*/
-    AddTrColor: function (jqTr) {//单独放在一个函数，是为了统计选中的行数量和快速获取某行的值
-        var index = this.GetRowIndex(jqTr); //第几行               
-        this.AddTrColor2(index, jqTr);
+    AddTrColor: function (tId, jqTr) {//单独放在一个函数，是为了统计选中的行数量和快速获取某行的值
+        var index = this.GetRowIndex(tId, jqTr); //第几行               
+        this.AddTrColor2(tId, index, jqTr);
     },
     /**
     * 删除行的颜色
     * @param {Number} index，行索引
     * @param {JqueryObject} jqTr，行tr的jQuery对象
     */
-    RemoveTrColor2: function (index, jqTr) {
-        if (BootStrap.Datagrid.DataGridStatus.selectTrIndexColl.contains(index)) {
-            BootStrap.Datagrid.DataGridStatus.selectTrIndexColl.removeValue(index);
+    RemoveTrColor2: function (tId, index, jqTr) {
+        var currGridData = this.GetGridDataById(tId);
+        if (currGridData.selectTrIndexColl.contains(index)) {
+            currGridData.selectTrIndexColl.removeValue(index);
         }
-        if (jqTr.hasClass("info")) {
-            jqTr.removeClass("info");
-            this.RemoveCheck(jqTr, index); //去掉选中
-            if (this.DataGridSetData.onUnselect) { //如果不存在info样式，说明已经触发过onUnSelect，所以，开始存在info样式，才需要触发onUnSelect事件
-                this.DataGridSetData.onUnselect(index, BootStrap.Datagrid.DataGridSetData.data.rows[index]);
-                if (this.DataGridSetData.onUnselectAll) {
-                    if (this.DataGridStatus.selectTrIndexColl.length == 0) { //判断时候全部取消
-                        this.DataGridSetData.onUnselectAll(this.DataGridSetData.data.rows);
+        if (this.RemoveTrColor3(jqTr)) {
+            //this.RemoveCheck(currGridData.tableId, jqTr, index); //去掉选中
+            if (currGridData.onUnselect) { //如果不存在info样式，说明已经触发过onUnSelect，所以，开始存在info样式，才需要触发onUnSelect事件
+                currGridData.onUnselect(index, currGridData.data.rows[index]);
+                if (currGridData.onUnselectAll) {
+                    if (currGridData.selectTrIndexColl.length == 0) { //判断时候全部取消
+                        currGridData.onUnselectAll(currGridData.data.rows);
                     }
                 }
             }
-        } else {
-            this.RemoveCheck(jqTr, index); //去掉选中
         }
     },
-    /*删除行的颜色*/
-    RemoveTrColor: function (jqTr) {
-        var index = this.GetRowIndex(jqTr);
-        this.RemoveTrColor2(index, jqTr);
+    /*直接修改颜色：返回true代表做了删除样式操作，false代表不做任何操纵*/
+    RemoveTrColor3: function (jqTr) {
+        if (jqTr.hasClass("info")) {
+            jqTr.removeClass("info");
+            return true;
+        }
+        return false;
     },
     /*checkbox去掉选中*/
-    RemoveCheck: function (jqTr, rowIndex) {
-        if (BootStrap.Datagrid.DataGridStatus.checkedBoxIndexColl.contains(rowIndex)) {//同时去掉选中
-            BootStrap.Datagrid.DataGridStatus.checkedBoxIndexColl.removeValue(rowIndex);
-            if (!this.DataGridStatus.isCheckAllEvent) {//如果是全选事件，就不必要做任何操作，因为全选触发的已经是点击事件，状态会自动改变
+    RemoveCheck: function (tId, jqTr, rowIndex) {
+        var currGridData = this.GetGridDataById(tId);
+        if (currGridData.checkedBoxIndexColl.contains(rowIndex)) {//同时去掉选中
+            currGridData.checkedBoxIndexColl.removeValue(rowIndex);
+            if (!currGridData.isCheckAllEvent) {//如果是全选事件，就不必要做任何操作，因为全选触发的已经是点击事件，状态会自动改变
                 var cb = jqTr.find("input:first");
                 if (cb.attr("checked")) {
                     cb.attr("checked", false);
-                    BootStrap.Datagrid.ChangeGlobalBoxStatus(false);
+                    BootStrap.Datagrid.ChangeGlobalBoxStatus(tId, false);
                 }
             }
         }
     },
-    /*切换行的颜色*/
-    TrToggleClass: function (index, jqTr) {
+    /*删除行的颜色*/
+    RemoveTrColor: function (tId, jqTr) {
+        var index = this.GetRowIndex(tId, jqTr);
+        this.RemoveTrColor2(tId, index, jqTr);
+    },
+    /*切换行的颜色,返回true代表是增加颜色，false是代表删除颜色*/
+    TrToggleClass: function (tId, index, jqTr) {
         if (jqTr.hasClass("info")) {
-            BootStrap.Datagrid.RemoveTrColor2(index, jqTr);
+            BootStrap.Datagrid.RemoveTrColor2(tId, index, jqTr);
+            return false;
         } else {
-            BootStrap.Datagrid.AddTrColor2(index, jqTr);
+            BootStrap.Datagrid.AddTrColor2(tId, index, jqTr);
+            return true;
         }
     },
     /*指定添加或删除*/
-    TrToggleClass2: function (isAdd, jqTr) {
+    TrToggleClass2: function (tId, isAdd, jqTr) {
         if (isAdd) {
             if (!jqTr.hasClass("info")) {
-                BootStrap.Datagrid.AddTrColor(jqTr);
+                BootStrap.Datagrid.AddTrColor(tId, jqTr);
             }
         } else {
             if (jqTr.hasClass("info")) {
-                BootStrap.Datagrid.RemoveTrColor(jqTr);
+                BootStrap.Datagrid.RemoveTrColor(tId, jqTr);
             }
+        }
+    },
+    /*指定添加或删除*/
+    TrToggleClass3: function (tId, isAdd, index, jqTr) {
+        if (isAdd) {
+            BootStrap.Datagrid.AddTrColor2(tId, index, jqTr);
+        } else {
+            BootStrap.Datagrid.RemoveTrColor2(tId, index, jqTr);
         }
     },
     //#endregion   
     /*jQuery点击列表前面的checkbox，如果是调用jQuery的click事件，那么就会导致先执行事件，再更新checked的值，因此，要对这个情况作处理*/
-    JqClickCheckBox: function (jqBox) {
-        this.DataGridStatus.isJqClickCheckBox.isJqClick = true;
-        this.DataGridStatus.isJqClickCheckBox.value = jqBox.attr("checked") == undefined;
+    JqClickCheckBox: function (tId, jqBox) {
+        var currGridData = this.GetGridDataById(tId);
+        currGridData.isJqClickCheckBox.isJqClick = true;
+        currGridData.isJqClickCheckBox.value = jqBox.attr("checked") == undefined;
         jqBox.click();
     },
     /* 根据条件判断是否勾选checkbox */
-    JudgeClickCheckBox: function (jqTr) {
+    JudgeClickCheckBox: function (tId, jqTr, isCheck) {
         var cb = jqTr.find("input:first");
-        var _trHasInfoClass = jqTr.hasClass("info");
-        var _isCheck = cb.attr("checked");
-        //如果选中行，而且已经是勾选checkbox，或者没有选中行，而且也没有勾选checkbox，那么就不需要执行checkbox事件
-        if (!((_trHasInfoClass && _isCheck) || (!_trHasInfoClass && _isCheck == undefined))) {
-            BootStrap.Datagrid.DataGridStatus.isSelectOnCheckEvent = true; //记录是selectOnCheck事件
-            BootStrap.Datagrid.JqClickCheckBox(cb);
+        var currGridData = this.GetGridDataById(tId);
+        if (isCheck && cb.attr("checked") == undefined) {
+            currGridData.isCheckOnSelectEvent = true; //记录是selectOnCheck事件
+            BootStrap.Datagrid.JqClickCheckBox(tId, cb);
+        }
+        else if (!isCheck && cb.attr("checked") != undefined) {
+            currGridData.isCheckOnSelectEvent = true; //记录是selectOnCheck事件
+            BootStrap.Datagrid.JqClickCheckBox(tId, cb);
         }
     },
     /*
     * 改变控制全选checkbox的状态
     * @param {Boolean} isChecked，值为true，选中；fals取消
     */
-    ChangeGlobalBoxStatus: function (isChecked) {
+    ChangeGlobalBoxStatus: function (tId, isChecked) {
+        var currGridData = this.GetGridDataById(tId);
         if (isChecked) {
-            if (!BootStrap.Datagrid.DataGridStatus.cacheGlobalBoxStatus) {//如果是不选中
-                BootStrap.Datagrid.DataGridStatus.cacheGlobalBoxStatus = true; //记录已经选中
-                var globalBox = $("#" + BootStrap.Datagrid.DataGridStatus.checkAllId);
+            if (!currGridData.cacheGlobalBoxStatus) {//如果是不选中
+                currGridData.cacheGlobalBoxStatus = true; //记录已经选中
+                var globalBox = $("#" + currGridData.checkAllId);
                 if (!globalBox.attr("checked")) {
                     globalBox.attr("checked", true);
-                    BootStrap.Datagrid.CheckAllBox(BootStrap.Datagrid.DataGridSetData.data.rows); //执行用户定义的全选后的事件
+                    BootStrap.Datagrid.CheckAllBox(currGridData.tableId, currGridData.data.rows); //执行用户定义的全选后的事件
                 }
             }
         } else {
-            if (BootStrap.Datagrid.DataGridStatus.cacheGlobalBoxStatus) {//如果是已经选中才执行
-                BootStrap.Datagrid.DataGridStatus.cacheGlobalBoxStatus = false;
-                var globalBox = $("#" + BootStrap.Datagrid.DataGridStatus.checkAllId);
+            if (currGridData.cacheGlobalBoxStatus) {//如果是已经选中才执行
+                currGridData.cacheGlobalBoxStatus = false;
+                var globalBox = $("#" + currGridData.checkAllId);
                 if (globalBox.attr("checked")) {
                     globalBox.attr("checked", false);
                 }
@@ -720,245 +1154,173 @@ BootStrap.Datagrid = {
 
     },
     /*全选checkbox时执行的事件*/
-    CheckAllBox: function (rows) {
-        if (this.DataGridSetData.onCheckAll) {
-            this.DataGridSetData.onCheckAll(rows);
+    CheckAllBox: function (tId, rows) {
+        var currGridData = this.GetGridDataById(tId);
+        if (currGridData.onCheckAll) {
+            currGridData.onCheckAll(rows);
         }
     },
     /*取消全选checkbox时执行的事件*/
-    UnCheckAllBox: function (rows) {
-        if (this.DataGridSetData.onUncheckAll) {
-            this.DataGridSetData.onUncheckAll(rows);
+    UnCheckAllBox: function (tId, rows) {
+        var currGridData = this.GetGridDataById(tId);
+        if (currGridData.onUncheckAll) {
+            currGridData.onUncheckAll(rows);
         }
     },
-    /*生成html数据*/
-    GenerateTableHtml: function () {
-        var table = $("#" + this.DataGridStatus.tableId);
-        if (this.DataGridStatus.isFirstLoad) {
-            table.html(this.LoadTableHead()); //表头
-        }
-        table.find("tbody").remove(); //.find("tr:gt(0)").remove();
-        table.append(this.GetGeneralColumnsHtml());
-        if (this.DataGridSetData.pagination) {
-            BootStrap.Pager.SetPageHtmlAjax({
-                pageIndex: this.DataGridSetData.pageIndex,
-                pageSize: this.DataGridSetData.pageSize,
-                pageTotalCount: this.DataGridSetData.data.total,
-                hrefUrl: this.DataGridSetData.url,
-                pageList: this.DataGridSetData.pageList,
-                pageEvent: null,
-                eventData: null
-            });
-        }
-
-    },
-    LoadTableHead: function () {
-        var headTemplate = '<thead><tr class="datagrid-header">%1</tr></thead>';
-        var headTd = '<th field="%3" class="table-common-th" %1><div class="datagrid-cell table-th-div %1">%2</div></th>';
-        var headHtml = [];
-        var dataGridSetData = this.DataGridSetData;
-        if (dataGridSetData.columns && dataGridSetData.columns.length > 0) {
-            var style = [];
-            var rownumberData = this.GetRownumberData();
-            headHtml.push('<th class="table-rownumbers-thtd" ' + rownumberData.widthPx + '>&nbsp;</th>');
-            if (dataGridSetData.checkbox) {
-                headHtml.push('<th class="table-first-thtd"><input type="checkbox" id="' + this.DataGridStatus.checkAllId + '" class="group-checkable" /></th>');
-            }
-            $.each(dataGridSetData.columns[0], function (i, d) {
-                var className = "grid_cell_" + d.field;
-                var width = "width:" + (d.width ? d.width : 80) + "px;";
-                style.push({ key: "." + className, value: "{" + width + "}" });
-                var thStyle = "style='" + width + "'";
-                headHtml.push(String.format(headTd, thStyle, d.title, d.field));
-                //BootStrap.Datagrid.DataGridStatus.columnSequence.push(d.field);//记录列的顺序
-            });
-            headHtml.push('<th class="table-last-thtd" style="border-top:0;"><div class="datagrid-cell">&nbsp;</div></th>'); //最后一个td是填充作用
-            headTemplate = String.format(headTemplate, headHtml.join(" "));
-            BootStrap.Tools.CreateStyle(style); //创建样式
-        }
-        return headTemplate;
-    },
-    GetFrozenColumnsHtml: function () {
-
-    },
-    /*生成非冻结列*/
-    GetGeneralColumnsHtml: function () {
-        var bodyTrHtml = [];
-        var tds = [];
-        if (this.DataGridSetData.data && this.DataGridSetData.data.rows) {
-            var getAlign = function (val) {
-                if (val) {
-                    return "text-align:" + val + ";";
-                } else {
-                    return "text-align:left;";
-                }
-            };
-            var rownumberData = this.GetRownumberData(); //获取rownumber的数据
-            $.each(this.DataGridSetData.data.rows, function (index, data) {
-                tds.length = 0;
-                tds.push('<td class="table-rownumbers-thtd" ' + rownumberData.widthPx + '>' + (rownumberData.hasNumber ? String(++rownumberData.beginIndex) : "") + '</td>');
-                if (BootStrap.Datagrid.DataGridSetData.checkbox) {
-                    tds.push('<td class="table-first-thtd"><input type="checkbox" id="cb_row_' + index + '" class="group-checkable" /></td>');
-                }
-                $.each(BootStrap.Datagrid.DataGridSetData.columns[0], function (i, d) {
-                    var className = "grid_cell_" + d.field;
-                    var nowrapClass = BootStrap.Datagrid.DataGridSetData.nowrap ? "datagrid-cell-nowrap" : "";
-                    var tText = data[d.field];
-                    if (d.formatter) {
-                        tText = d.formatter(tText, data, index);
-                    }
-                    tds.push("<td  class='datagrid-body-cell" + " " + nowrapClass + " " + className + "' style='" + getAlign(d.align) + "'  field='" + d.field + "'>" + tText + "</td>");
-
-                });
-                tds.push("<td class='datagrid-body-cell table-last-thtd' style='border-top:0;'>&nbsp;</td>");
-                var _rowSytle = "";
-                if (typeof BootStrap.Datagrid.DataGridSetData.rowStyler == "function") {
-                    _rowSytle = BootStrap.Datagrid.DataGridSetData.rowStyler(index, data);
-                    _rowSytle = _rowSytle ? " style='" + _rowSytle + "'" : "";
-                }
-                var trDefClass = index % 2 != 0 ? " class='datagrid-tr-even' " : ""; //隔行变色
-                bodyTrHtml.push("<tr" + _rowSytle + trDefClass + " dataIndex='" + index + "'>" + tds.join(" ") + "</tr>");
-            });
-        }
-        return "<tbody>" + bodyTrHtml.join(" ") + "</tbody>";
-    },
-    /*获取rownumber的数据*/
-    GetRownumberData: function () {
-        var beginIndex = (BootStrap.Datagrid.DataGridSetData.pageIndex - 1) * BootStrap.Datagrid.DataGridSetData.pageSize;
-        var hasNumber = BootStrap.Datagrid.DataGridSetData.rownumbers;
-        var widthPx = ""; //根据数字的位数确定rownumber列的宽度
-        if (hasNumber) {
-            var max = beginIndex + BootStrap.Datagrid.DataGridSetData.pageSize;
-            widthPx = "style='width:" + (6 * String(max).length) + "px'"; //每个数字宽度为6像素
-        }
-        return { beginIndex: beginIndex, hasNumber: hasNumber, widthPx: widthPx };
-    },
-
-
 
     //#region 获取datagrid各个值的方法
-    Options: function (tableId) {
-        return BootStrap.Datagrid.DataGridSetData;
+    Options: function (tId) {
+        return this.GetGridDataById(tId);
     },
     /*返回页面对象*/
-    GetPager: function (tableId) {
+    GetPager: function (tId) {
         return BootStrap.Pager.pageData;
     },
     /* 返回非冻结列字段，以数组形式返回*/
-    GetColumnFields: function (tableId) {
+    GetColumnFields: function (tId) {
+        var currGridData = this.GetGridDataById(tId);
         var fields = [];
-        $.each(this.DataGridSetData.columns[0], function (i, d) {
+        $.each(currGridData.columns[0], function (i, d) {
             fields.push(d.field); //记录列的顺序
         });
         return fields;
     },
     /* 返回冻结列字段*/
-    GetFrozenColumnFields: function (tableId) {
-        return null;
+    GetFrozenColumnFields: function (tId) {
+        var currGridData = this.GetGridDataById(tId);
+        var fields = [];
+        var froCol = currGridData.frozenColumns;
+        if (froCol && froCol.length > 0) {
+            $.each(currGridData.frozenColumns[0], function (i, d) {
+                fields.push(d.field); //记录列的顺序
+            });
+        }
+        return fields;
     },
     /* 返回指定列属性*/
-    GetColumnOption: function (tableId, field) {
-        var cloumns = BootStrap.Datagrid.DataGridSetData.columns[0];
-        for (var i in cloumns) {
-            if (cloumns[i].field == field) {
-                return BootStrap.Tools.Clone(cloumns[i]);
+    GetColumnOption: function (tId, field) {
+        var currGridData = this.GetGridDataById(tId);
+        var columns = currGridData.columns[0];
+        for (var i in columns) {
+            if (columns[i].field == field) {
+                return BootStrap.Tools.Clone(columns[i]);
             }
         }
         return null;
     },
-    /*加载和显示第一页的所有行。如果指定了'param'，它将取代'queryParams'属性*/
-    Load: function (tableId, param) {
-        BootStrap.Datagrid.DataGridSetData.pageIndex = 1;
-        BootStrap.Datagrid.LoadData(BootStrap.Datagrid.DataGridStatus.tableId, param);
+    /*加载和显示第一页的所有行。如果指定第二个参数，必须是Json数据，它将取代'queryParams'属性*/
+    Load: function (tId) {
+        var currGridData = this.GetGridDataById(tId);
+        var param = {};
+        if (arguments) {
+            if (arguments.length > 1) {
+                param = arguments[1];
+            }
+        }
+        currGridData.pageIndex = 1;
+        var isNull = BootStrap.Tools.JudgeJsonIsNull(param);
+        if (!isNull) {
+            if (!currGridData.queryParams) {
+                currGridData.queryParams = {};
+            }
+            currGridData.queryParams = param;
+        }
+        BootStrap.Datagrid.Init(currGridData.tableId, {});
     },
     /*重载行。等同于'load'方法，但是它将保持在当前页。*/
-    Reload: function (tableId, param) {
-        BootStrap.Datagrid.LoadData(BootStrap.Datagrid.DataGridStatus.tableId, param);
+    Reload: function (tId, param) {
+        BootStrap.Datagrid.Init(this.GetGridDataById(tId).tableId, param);
     },
     /*返回加载完毕后的数据*/
-    GetData: function (tabledId) {
-        return BootStrap.Tools.Clone(BootStrap.Datagrid.DataGridSetData.data);
+    GetData: function (tId) {
+        return BootStrap.Tools.Clone(this.GetGridDataById(tId).data);
     },
     /*返回当前页的所有行。*/
-    GetRows: function (tabledId) {
-        return BootStrap.Tools.Clone(BootStrap.Datagrid.DataGridSetData.data.rows);
+    GetRows: function (tId) {
+        return BootStrap.Tools.Clone(this.GetGridDataById(tId).data.rows);
     },
     /*根据索引集合获取行的数据*/
-    GetByRowIndexs: function (tabledId, indexColl) {
+    GetByRowIndexs: function (tId, indexColl) {
         var checkRow = [];
         if (indexColl) {
             indexColl.delRepeat();
             $.each(indexColl, function (i, d) {
-                checkRow.push(BootStrap.Datagrid.DataGridSetData.data.rows[d]);
+                checkRow.push(BootStrap.Datagrid.GetGridDataById(tId).data.rows[d]);
             });
         }
         return checkRow;
     },
     /*返回复选框被选中复选框的所有行。*/
-    GetChecked: function (tabledId) {
-        return this.GetByRowIndexs(this.DataGridStatus.checkedBoxIndexColl);
+    GetChecked: function (tId) {
+        return this.GetByRowIndexs(tId, this.GetGridDataById(tId).checkedBoxIndexColl);
     },
     /*返回所有被选中的行，当没有记录被选中的时候将返回一个空数组。*/
-    GetSelections: function (tabledId) {
-        return this.GetByRowIndexs(this.DataGridStatus.selectTrIndexColl);
+    GetSelections: function (tId) {
+        return this.GetByRowIndexs(tId, this.GetGridDataById(tId).selectTrIndexColl);
     },
     /*返回第一个被选中的行或如果没有选中的行则返回null。*/
-    GetSelected: function (tabledId) {
-        if (this.DataGridStatus.selectTrIndexColl.length < 1) {
+    GetSelected: function (tId) {
+        var currGridData = this.GetGridDataById(tId);
+        if (currGridData.selectTrIndexColl.length < 1) {
             return null;
         }
-        this.DataGridStatus.selectTrIndexColl.delRepeat();
+        currGridData.selectTrIndexColl.delRepeat();
         var data = null;
-        this.DataGridStatus.selectTrIndexColl.sort();
-        if (BootStrap.Datagrid.DataGridSetData.data) {
-            return BootStrap.Tools.Clone(BootStrap.Datagrid.DataGridSetData.data.rows[this.DataGridStatus.selectTrIndexColl[0]]);
+        currGridData.selectTrIndexColl.sort();
+        if (currGridData.data) {
+            return BootStrap.Tools.Clone(currGridData.data.rows[currGridData.selectTrIndexColl[0]]);
         }
         return null;
 
     },
     /*清除所有选择的行*/
-    ClearSelections: function (tabledId) {
-        $("#" + this.DataGridStatus.tableId + " tr.info").each(function () {
+    ClearSelections: function (tId) {
+        var currGridData = this.GetGridDataById(tId);
+        $(currGridData.tableId + " tr.info").each(function () {
             $(this).find("td:first").click(); //如果单击行是编辑列的话，点击的时候，可能会出现编辑框，这是一个bug
             //$(this).removeClass("info");//清除所有选择的行，不会触发点击事件          
         });
-        this.DataGridStatus.selectTrIndexColl.length = 0; //清空选中
+        currGridData.selectTrIndexColl.length = 0; //清空选中
     },
     /*清除所有勾选的行*/
-    ClearChecked: function (tabledId) {
-        $("#" + this.DataGridStatus.tableId + " tr:gt(0)").each(function (i) {
-            if (BootStrap.Datagrid.DataGridStatus.checkedBoxIndexColl.contains(i)) {
+    ClearChecked: function (tId) {
+        var currGridData = this.GetGridDataById(tId);
+        $(currGridData.tableId + " tr:gt(0)").each(function (i) {
+            if (currGridData.checkedBoxIndexColl.contains(i)) {
                 var cb = $(this).find("input:first");
                 if (cb.attr("checked")) {
-                    BootStrap.Datagrid.JqClickCheckBox(cb); //清除选中，同时触发选中事件
+                    BootStrap.Datagrid.JqClickCheckBox(currGridData.tableId, cb); //清除选中，同时触发选中事件
                 }
             }
         });
-        BootStrap.Datagrid.DataGridStatus.checkedBoxIndexColl.length = 0;
+        currGridData.checkedBoxIndexColl.length = 0;
     },
     /*选择当前页中所有的行*/
-    SelectAll: function (tabledId) {
-        $("#" + this.DataGridStatus.tableId + " tr:gt(0):not(tr.info)").each(function () { $(this).find("td:first").click(); });
+    SelectAll: function (tId) {
+        var currGridData = this.GetGridDataById(tId);
+        $(currGridData.tableId + " tr:gt(0):not(tr.info)").each(function () { $(this).find("td:first").click(); });
     },
     /*择一行，行索引从0开始。*/
-    SelectRow: function (tabledId, index) {
+    SelectRow: function (tId, index) {
+        var currGridData = this.GetGridDataById(tId);
         if (index < 0) return;
-        if (!this.DataGridStatus.selectTrIndexColl.contains(index)) {
-            this.DataGridStatus.selectTrIndexColl.push(index); //记录选中
+        if (!currGridData.selectTrIndexColl.contains(index)) {
+            currGridData.selectTrIndexColl.push(index); //记录选中
             //要排除掉第一行的thread
-            var row = $("#" + this.DataGridStatus.tableId + " tr:eq(" + (++index) + "):not(tr.info)");
+            var row = $(currGridData.tableId + " tr:eq(" + (++index) + "):not(tr.info)");
             if (row.length > 0) {
                 row.find("td:first").click();
             }
         }
     },
     /*取消选择一行*/
-    UnselectRow: function (tabledId, index) {
+    UnselectRow: function (tId, index) {
+        var currGridData = this.GetGridDataById(tId);
         if (index < 0) return;
-        if (this.DataGridStatus.selectTrIndexColl.contains(index)) {
-            this.DataGridStatus.selectTrIndexColl.removeValue(index); //剔除选中
+        if (currGridData.selectTrIndexColl.contains(index)) {
+            currGridData.selectTrIndexColl.removeValue(index); //剔除选中
             //要排除掉第一行的thread
-            var row = $("#" + this.DataGridStatus.tableId + " tr:eq(" + (++index) + ")");
+            var row = $(currGridData.tableId + " tr:eq(" + (++index) + ")");
             if (row.length > 0) {
                 if (row.hasClass("info")) {
                     row.find("td:first").click();
@@ -967,11 +1329,12 @@ BootStrap.Datagrid = {
         }
     },
     /* 设置页面额外数据 setJsonData={displayMsg:"额外数据"} */
-    SetPagerDisplayMsg: function (tabledId, setJsonData) {
-        BootStrap.Pager.SetPagination(setJsonData);
+    SetPagerDisplayMsg: function (tId, setJsonData) {
+        BootStrap.Pager.SetPagination(tId, setJsonData);
     }
     //#endregion
 };
+
 
 /**
 * 分页组件
@@ -979,10 +1342,10 @@ BootStrap.Datagrid = {
 * @description 获取分页的html
 */
 BootStrap.Pager = {
-    paginationHtml: '<div class="pagination pagination-left"> </div>',
-    paginationWrite: '<div class="pagination-info-right"><span style="color: red">可填充内容</span>&nbsp;</div>',
-    //分页div样式名称
-    _paginationDivClassName: "pagination",
+    paginationHtml: '<div class="pagination pagination-left" id="%1_pagination" style="margin:6px 0px;"> </div>',
+    paginationWrite: '<div class="pagination-info-right" id="%1_pagination_right"><span style="color: red"></span>&nbsp;</div>',
+    //分页div的ID
+    _paginationId: "#%1_pagination",
     pageData: null,
     ShowGridMaskLayout: function () {
         var accordionHeight = $("#accordion").outerHeight(true);
@@ -990,18 +1353,23 @@ BootStrap.Pager = {
             accordionHeight = 0;
         }
         BootStrap.Tools.ShowMaskLayout2(0.5, accordionHeight);
+        var args = arguments;
+        if (args && args.length > 0) {
+            $(".grid_mask_layout").html('<span style="margin-left:45%;color: white;">' + args[0] + '</span>');
+        }
     },
     HideGridMaskLayout: function () {
-        //BootStrap.Tools.HideMaskLayout2();
+        BootStrap.Tools.HideMaskLayout2();
     },
-    GetPagination: function () {
-        var pager = $("." + this._paginationDivClassName);
+    GetPagination: function (tId) {
+        var _tid = BootStrap.Tools.GetIdNameTrimOther(tId);
+        var pager = $(String.format(this._paginationId, _tid));
         if (pager.length > 0) {
             return pager;
         } else {
-            var pagination = $(this.paginationHtml + this.paginationWrite);
-            $(".body-panel-content").after(pagination);
-            return this.GetPagination();
+            var pagination = $(String.format(this.paginationHtml, _tid) + String.format(this.paginationWrite, _tid));
+            $("#" + _tid + "_body_panel").after(pagination);
+            return this.GetPagination(tId);
         }
     },
     /*获取总页数*/
@@ -1012,12 +1380,12 @@ BootStrap.Pager = {
         }
         return realPages;
     },
-    GetPageListHtml: function (pageList, selectItem) {
+    GetPageListHtml: function (tId, pageList, selectItem) {
         if (!pageList) {
             return "";
         }
         var pageHtml = [];
-        pageHtml.push('<select class="pagination-page-list pagination-page-list-other">');
+        pageHtml.push('<select class="pagination-page-list pagination-page-list-other" tid="' + tId + '" id="' + BootStrap.Tools.GetIdNameTrimOther(tId) + '_page_list">');
         $.each(pageList, function (i, d) {
             pageHtml.push("<option" + (selectItem == d ? " selected" : "") + ">" + d + "</option>");
         });
@@ -1038,6 +1406,7 @@ BootStrap.Pager = {
     },
     /**
     * 根据条件生成分页html，并插入到样式class="pagination"的div里
+    * @param {String} tId，表格ID
     * @param {Json} pageSetJsonData，页设置Json数据：{pageIndex: 1,pageSize: 10,pageTotalCount: 50,pageList: [10,20],hrefUrl: "/Home",pageEvent: function(){},eventData: function(){}}
     * @param {Number} pageIndex，当前页
     * @param {Number} pageSize，每页数据量大小
@@ -1045,7 +1414,7 @@ BootStrap.Pager = {
     * @param {String} hrefUrl，要跳转的连接：/Home/Index
     * @param {String} urlAttr，连接字符串： id=1&name=abc
     */
-    SetPageHtmlAjax: function (pageSetJsonData) {
+    SetPageHtmlAjax: function (tId, pageSetJsonData) {
         if (!pageSetJsonData.pageIndex || !pageSetJsonData.pageSize) {
             return;
         }
@@ -1062,8 +1431,8 @@ BootStrap.Pager = {
             eventData: pageSetJsonData.eventData
         };
         this.pageData = this.SetPageData(this.pageData);
-        var pageHtml = this.PageDataToHtmlAjax();
-        var pagination = this.GetPagination();
+        var pageHtml = this.PageDataToHtmlAjax(tId);
+        var pagination = this.GetPagination(tId);
         pagination.html(pageHtml);
         if (this.pageData.pageEvent && (typeof this.pageData.pageEvent) === "function") {
             pagination.find("ul li a[isclick!=true]").click(function () {
@@ -1072,9 +1441,10 @@ BootStrap.Pager = {
                 }
             });
         }
-        this.AddEvent();
+        this.AddEvent(tId);
     },
-    PageDataToHtmlAjax: function () {
+    PageDataToHtmlAjax: function (tId) {
+        var currGridData = BootStrap.Datagrid.GetGridDataById(tId);
         var _pageData = this.pageData;
         if (_pageData.hrefUrl) {
             _pageData.hrefUrl = _pageData.hrefUrl.replace("?", "");
@@ -1083,13 +1453,13 @@ BootStrap.Pager = {
         var start = (_pageData.pageIndex - showPageCount / 2) >= 1 ? _pageData.pageIndex - showPageCount / 2 : 1;
         var end = (_pageData.realPages - start) > showPageCount ? start + showPageCount : _pageData.realPages;
         var pagerHtmlArr = [];
-        pagerHtmlArr.push(this.GetPageListHtml(_pageData.pageList, _pageData.pageSize));
+        pagerHtmlArr.push(this.GetPageListHtml(tId, _pageData.pageList, _pageData.pageSize));
         pagerHtmlArr.push('<ul>');
         var disablePre = _pageData.hasPrePage ? "" : 'class="disabled"'; //是否可以点击上一页
         pagerHtmlArr.push(String.format('<li isclick="true" %1><a href="javascript:void(0);" page="1" >首页</a></li>', disablePre)); //首页
         pagerHtmlArr.push(String.format('<li isclick="true" %1><a href="javascript:void(0);"  page="%2">«</a></li>', disablePre, String(_pageData.pageIndex - 1)));
 
-        if (BootStrap.Datagrid.DataGridSetData.data.rows && BootStrap.Datagrid.DataGridSetData.data.rows.length > 0) {
+        if (currGridData.data.rows && currGridData.data.rows.length > 0) {
             for (var i = start; i <= end; i++) {//前后各显示5个数字页码
                 if (i == _pageData.pageIndex) {
                     pagerHtmlArr.push(String.format("<li isclick='true' class='active'><a href='javascript:void(0);' page='%1'>%1</a></li>", String(i)));
@@ -1108,12 +1478,10 @@ BootStrap.Pager = {
         pagerHtmlArr.push(search);
         return pagerHtmlArr.join(" ");
     },
-    AddEvent: function () {
-        var paginationDiv = this.GetPagination();
-        paginationDiv.find("ul li a.page_go").click(function (e) {
+    AddEvent: function (tId) {
+        var paginationDiv = this.GetPagination(tId);
+        paginationDiv.find("ul li a.page_go").attr("tid", tId).click(function (e) {
             BootStrap.Tools.StopBubble(e);
-            console.info(e);
-            console.info(event);
             var pagerPlugin = BootStrap.Pager;
             if (pagerPlugin.pageData.pageTotalCount < 1) {
                 return false;
@@ -1122,39 +1490,48 @@ BootStrap.Pager = {
             if (!pageVal) {
                 return false;
             }
-            var intPageIndex = parseInt(pageVal);
+            var intPageIndex = Math.abs(parseInt(pageVal));
+            if (intPageIndex == 0) {
+                intPageIndex = 1;
+            }
             var realPageCount = pagerPlugin.GetRealPages(pagerPlugin.pageData.pageTotalCount, pagerPlugin.pageData.pageSize); //获取总页数
             if (intPageIndex > realPageCount) {
                 intPageIndex = realPageCount;
             }
-            BootStrap.Datagrid.DataGridSetData.pageIndex = intPageIndex; //记录是第几页
-            BootStrap.Datagrid.LoadData(BootStrap.Datagrid.DataGridStatus.tableId, { pageIndex: intPageIndex });
+            var currGridData = BootStrap.Datagrid.GetGridDataById($(this).attr("tid")); //获取dategrid设置数据
+            currGridData.pageIndex = intPageIndex; //记录是第几页
+            BootStrap.Pager.LoadGridData(currGridData, { pageIndex: intPageIndex });
             return false;
         });
-        paginationDiv.find("ul li[isclick='true']").click(function (e) {
-            BootStrap.Tools.StopBubble(e);
-            if ($(this).hasClass("disabled") || $(this).hasClass("active")) {
-                return;
-            }
-            var intPageIndex = parseInt($(this).find("a").attr("page"));
-            BootStrap.Datagrid.DataGridSetData.pageIndex = intPageIndex; //记录是第几页
-            BootStrap.Datagrid.LoadData(BootStrap.Datagrid.DataGridStatus.tableId, { pageIndex: intPageIndex });
+        paginationDiv.find("ul li[isclick='true']").each(function () {
+            var thisLi = $(this);
+            thisLi.attr("tid", tId).click(function (e) {
+                BootStrap.Tools.StopBubble(e);
+                if ($(this).hasClass("disabled") || $(this).hasClass("active")) {
+                    return;
+                }
+                var currGridData = BootStrap.Datagrid.GetGridDataById(thisLi.attr("tid")); //获取dategrid设置数据
+                var intPageIndex = parseInt($(this).find("a").attr("page"));
+                currGridData.pageIndex = intPageIndex; //记录是第几页
+                BootStrap.Pager.LoadGridData(currGridData, { pageIndex: intPageIndex });
+            });
         });
-        paginationDiv.delegate(".pagination-page-list", "change", function (e) {
+        paginationDiv.find(tId + "_page_list").bind("change", function (e) {
             var pageSize = $(this).val();
             if (pageSize) {
-                setTimeout(function () {
-                    BootStrap.Datagrid.LoadData(BootStrap.Datagrid.DataGridStatus.tableId, { pageSize: pageSize });
-                }, 0);
+                var currGridData = BootStrap.Datagrid.GetGridDataById($(this).attr("tid")); //获取dategrid设置数据
+                BootStrap.Pager.LoadGridData(currGridData, { pageSize: pageSize });
             }
         });
 
     },
-    GoToPageIndex: function (jqA) {
-        alert(pageIndex);
-        BootStrap.Datagrid.LoadData(BootStrap.Datagrid.DataGridStatus.tableId, { pageIndex: parseInt(jqA.attr("page")) });
+    LoadGridData: function (currGridData, param) {
+        BootStrap.Pager.ShowGridMaskLayout(); //调用遮罩层
+        var _tempT = setTimeout(function () {
+            BootStrap.Datagrid.Init(currGridData.tableId, param);
+            clearTimeout(_tempT);
+        }, 0);
     },
-
     //#region easyui风格的分页
     /**
     * 根据条件生成分页html，并插入到样式class="pagination"的div里
@@ -1164,7 +1541,7 @@ BootStrap.Pager = {
     * @param {String} hrefUrl，要跳转的连接：/Home/Index
     * @param {String} urlAttr，连接字符串： id=1&name=abc
     */
-    SetPageHtml: function (pageIndex, pageSize, pageTotalCount, hrefUrl, urlAttr) {
+    SetPageHtml: function (tId, pageIndex, pageSize, pageTotalCount, hrefUrl, urlAttr) {
         if (!pageIndex || !pageSize || !pageTotalCount) {
             return;
         }
@@ -1173,7 +1550,7 @@ BootStrap.Pager = {
             realPages: 0, hasNextPage: false, hasPrePage: false, hrefUrl: hrefUrl, urlAttr: urlAttr,
             pageEvent: null, eventData: null
         };
-        this.GetPagination().html(this.PageDataToHtml(this.SetPageData(pageData)));
+        this.GetPagination(tId).html(this.PageDataToHtml(this.SetPageData(pageData)));
     },
     /**
     * 根据条件生成分页html
@@ -1186,7 +1563,7 @@ BootStrap.Pager = {
     * @param {String} urlAttr，连接字符串： id=1&name=abc
     * @discription 根据条件生成分页html，并插入到样式class="pagination"的div里，并执行事件pageEvent，而且不刷新页面
     */
-    SetPageHtml2: function (pageIndex, pageSize, pageTotalCount, hrefUrl, urlAttr, pageEvent, eventData) {
+    SetPageHtml2: function (tId, pageIndex, pageSize, pageTotalCount, hrefUrl, urlAttr, pageEvent, eventData) {
         if (!pageIndex || !pageSize || !pageTotalCount) {
             return;
         }
@@ -1195,7 +1572,7 @@ BootStrap.Pager = {
             realPages: 0, hasNextPage: false, hasPrePage: false, hrefUrl: hrefUrl, urlAttr: urlAttr,
             pageEvent: pageEvent, eventData: eventData
         };
-        var pagination = this.GetPagination();
+        var pagination = this.GetPagination(tId);
         pagination.html(this.PageDataToHtml(this.SetPageData(pageData)));
         if ((typeof pageEvent) === "function") {
             pagination.find("ul li a").click(function () {
@@ -1248,9 +1625,9 @@ BootStrap.Pager = {
 
     //#region 获取pagination
     /*设置页面额外数据*/
-    SetPagination: function (setJsonData) {
+    SetPagination: function (tId, setJsonData) {
         if (setJsonData.displayMsg) {
-            $(".pagination-info-right span").html(setJsonData.displayMsg);
+            $(tId + "_pagination_right span").html(setJsonData.displayMsg);
         }
     }
     //#endregion
@@ -1275,6 +1652,7 @@ BootStrap.ComboBox = {
             id: "#demo1",
             url: "",
             data: null,
+            width: 220,
             valueField: "",
             textField: "",
             method: "POST",
@@ -1308,7 +1686,7 @@ BootStrap.ComboBox = {
         }
         this.TempComboBoxData = newOption;
         this.Data.push(newOption); //缓存数据
-        this.BuildCombox($(newOption.id), newOption);
+        this.BuildCombox($(newOption.id).css("width", newOption.width), newOption);
         if (newOption.onLoadSuccess) {
             this.OnLoadSuccess(newOption.data);
         }
@@ -1318,7 +1696,7 @@ BootStrap.ComboBox = {
     },
     BuildCombox: function (combobox, jsonData) {
         //添加输入框与下拉点击区域
-        combobox.append('<input type="text" class="combobox_input" data-value="" label="' + jsonData.label + '" /><span class="combobox_searbtn"></span><div class="combobox_data_list"></div>');
+        combobox.append('<input type="text" class="combobox_input" data-value="" style="width:' + (jsonData.width - 14) + 'px;" label="' + jsonData.label + '" /><span class="combobox_searbtn"></span><div class="combobox_data_list" style="width:' + (jsonData.width - 2) + 'px;" ></div>');
         if (!jsonData.data) {
             return;
         }
@@ -1369,6 +1747,9 @@ BootStrap.ComboBox = {
             comboBoxDataList.css("display", "none");
             _that.css("background-color", "#ccc").siblings().css("background-color", "#fff"); //改变选中项的颜色
             if (BootStrap.ComboBox.TempComboBoxData.onSelect && typeof BootStrap.ComboBox.TempComboBoxData.onSelect == "function") {//选中事件
+                var input = combobox.find("input:first");
+                if (!input) return;
+                BootStrap.ComboBox.GetComBoBoxDataByLabel(input.attr("label")); //更新数据
                 var itemData = BootStrap.ComboBox.GetDataByText(thisText);
                 BootStrap.ComboBox.TempComboBoxData.onSelect(itemData);
             }
@@ -1485,9 +1866,17 @@ BootStrap.ComboBox = {
         this.GetComBoBoxDataByLabel(input.attr("label")); //先把当前数据保存到this.TempComboBoxData变量中
         return BootStrap.Tools.Clone(this.TempComboBoxData.data);
     },
+    /*获取组件的值*/
+    GetValue: function (comboboxId) {
+        return $(comboboxId).find("input:first").attr("data-value");
+    },
+    /*获取组件的值，返回Json数据{ value:"1",text:"XX" }*/
+    GetText: function (comboboxId) {
+        return $(comboboxId).find("input:first").val();
+    },
     /*设置下拉列表框值数组*/
     SetValue: function (comboboxId, text) {
-        var combobox = $("#" + comboboxId);
+        var combobox = $(comboboxId);
         var comboBoxDataList = combobox.find(".combobox_data_list");
         var input = combobox.find("input:first");
         if (!input) return;
@@ -1501,7 +1890,7 @@ BootStrap.ComboBox = {
     },
     /*清除下拉列表框的值*/
     Clear: function (comboboxId) {
-        var combobox = $("#" + comboboxId);
+        var combobox = $(comboboxId);
         var input = combobox.find("input:first");
         if (!input) return;
         input.attr("data-value", "").val("");
@@ -1509,44 +1898,301 @@ BootStrap.ComboBox = {
     //#endregion
 };
 
+/**
+* 窗口组件
+* @namespace BootStrap.Window
+* @description 窗口控件是一个浮动和可拖拽的面板可以用作应用程序窗口。默认情况下,窗口可以移动,调整大小和关闭。它的内容也可以被定义为静态html或要么通过ajax动态加载
+*/
 BootStrap.Window = {
-    Dialog: {
-
-},
-Messager: {
-    /*消息窗口：%1是标题；2%消息内容；*/
-    ModalHtml: '<div class="modal" style="position: relative; top: auto; left: auto; right: auto; margin: 0 auto 20px; z-index: 1000; max-width: 100%;">\
-                  <div class="modal-header"><button type="button" class="close" data-dismiss="modal" aria-hidden="true">×</button><h3>%1</h3></div><div class="modal-body"><p>%2</p></div><div class="modal-footer"><a href="#" class="btn">关闭</a><a href="#" class="btn btn-primary">Save changes</a></div>\
+    Html: {
+        /*消息窗口：%1是标题；2%消息内容；*/
+        ModalHtml: '<div class="modal" style="position:absolute; top: auto; left: auto; right: auto; margin: 0 auto 20px; z-index: 1000; max-width: 100%;">\
+                  <div class="modal-header" style="padding: 0px 15px;"><button type="button" class="close" data-dismiss="modal" aria-hidden="true" onclick="BootStrap.Window.Messager.CloseModal();" >×</button><h4>%1</h4></div>\
+                    <div class="modal-body">%2</div><div class="modal-footer">%3</div>\
                 </div>',
-    Alert: function (options) {
-        /*showType：定义将如何显示该消息。可用值有：null,slide,fade,show。默认：slide。
-        showSpeed：定义窗口显示的过度时间。默认：600毫秒。
-        width：定义消息窗口的宽度。默认：250px。
-        height：定义消息窗口的高度。默认：100px。
-        title：在头部面板显示的标题文本。
-        msg：显示的消息文本。
-        style：定义消息窗体的自定义样式。
-        timeout：如果定义为0，消息窗体将不会自动关闭，除非用户关闭他。如果定义成非0的树，消息窗体将在超时后自动关闭。默认：4秒。*/
-        var modal = $(".modal");
-        if (modal.length < 1) {
-            modal = $(this.ModalHtml);
-            $(document.body).append(modal);
-        }
-        //赋值
-        //modal.show();
+        /*关闭按钮*/
+        CloseHtml: '<a href="#" onclick="BootStrap.Window.Messager.CloseModal();" class="btn">关闭</a>',
+        /*确定按钮*/
+        ConfirmHtml: '<a href="#" class="btn btn-primary">确定</a>'
     },
     /*
-    * 显示一个包含“确定”和“取消”按钮的确认消息窗口
-    * @param {String} title：在头部面板显示的标题文本。
-    * @param {String} msg：显示的消息文本。
-    * @param {Function} fn(b): 当用户点击“确定”按钮的时侯将传递一个true值给回调函数，否则传递一个false值。
+    * 弹出对话框窗口
+    * @param {objec} options,对象包含的键：
+    *   width：定义消息窗口的宽度。
+    *   height：定义消息窗口的高度。
+    *   title：在头部面板显示的标题文本。
+    *   href：加载的页面
     */
-    Confirm: function (title, msg, fn) {
+    Dialog: function (options) {
+        var modal = $(String.format(BootStrap.Window.Html.ModalHtml, options.title, "", ''));
+        $(document.body).append(modal);
+        BootStrap.Window.SetModalSize(modal, options);
+        this.Messager.ShowModal(modal, 200);
+        this.SetModalBodySize(modal, options);
+        $(".modal-body", modal).css("padding", "0px").html('<iframe scrolling="auto" frameborder="0" src="' + options.href + '" style="width: 100%;height: 100%"></iframe>');
+    },
+    /*消息框*/
+    Messager: {
+        /*
+        * 弹出消息框
+        * @param {objec} options,对象包含的键：
+        *   showType：定义将如何显示该消息。可用值有：null,slide,fade,show。默认：slide。
+        *   showSpeed：定义窗口显示的过度时间。默认：600毫秒。
+        *   width：定义消息窗口的宽度。
+        *   height：定义消息窗口的高度。
+        *   title：在头部面板显示的标题文本。
+        *   msg：显示的消息文本。
+        *   timeout：如果定义为0，消息窗体将不会自动关闭，除非用户关闭他。如果定义成非0的树，消息窗体将在超时后自动关闭。
+        */
+        Alert: function (options) {
+            var content = "<p>" + String.wrap(String.htmlEncode(options.msg)) + "</p>";
+            var modal = $(String.format(BootStrap.Window.Html.ModalHtml, options.title, content, BootStrap.Window.Html.CloseHtml));
+            $(document.body).append(modal);
+            BootStrap.Window.SetModalSize(modal, options);
+            var speed = 600;
+            if (options.showSpeed) {
+                speed = options.showSpeed;
+            }
+            this.ShowModal(modal, speed);
+            if (options.timeout && options.timeout != 0) {
+                var timeOut = setTimeout(function () {
+                    BootStrap.Window.Messager.CloseModal("Alert");
+                    clearTimeout(timeOut);
+                }, options.timeout);
+            }
+        },
+        /*
+        * 显示一个包含“确定”和“取消”按钮的确认消息窗口
+        * @param {String} title：在头部面板显示的标题文本。
+        * @param {String} msg：显示的消息文本。
+        * @param {Function} fn(b): 当用户点击“确定”按钮的时侯将传递一个true值给回调函数，否则传递一个false值。
+        */
+        Confirm: function (title, msg, fn) {
+            var content = "<p>" + String.wrap(String.htmlEncode(msg)) + "</p>"; //是否支持换行
+            var modal = $(String.format(BootStrap.Window.Html.ModalHtml, title, content, BootStrap.Window.Html.CloseHtml + BootStrap.Window.Html.ConfirmHtml));
+            $(document.body).append(modal);
+            if (fn) {
+                $(".btn-primary", modal).click(function () {
+                    var returnVal = (fn)();
+                    if (returnVal) {
+                        BootStrap.Window.Messager.CloseModal();
+                    }
+                    return false;
+                });
+            }
+            this.ShowModal(modal, 200);
 
+        },
+        /*显示对话框*/
+        ShowModal: function (modal, fadeSpeed) {
+            var screenHeight = BootStrap.Tools.GetScreenHeight();
+            var screenWidth = BootStrap.Tools.GetScreenWidth();
+            var modalHei = modal.outerHeight(false);
+            var modalWidth = modal.outerWidth(false);
+            BootStrap.Tools.ShowMaskLayout(0.5);
+            modal.css({ "top": ((screenHeight - modalHei) / 2) + "px", "left": ((screenWidth - modalWidth) / 2) + "px" }).fadeIn(fadeSpeed);
+        },
+        /*关闭对话框*/
+        CloseModal: function () {
+            var args = arguments;
+            if (args.length > 0 && args[0] == "Alert") {//因为alert和comfirm调用同一个html，所以自动关闭alert的时候，防止关闭confirm
+                if ($(".modal .btn-primary").length > 0) return false;
+            }
+            $('.modal').remove();
+            BootStrap.Tools.HideMaskLayout();
+            return false;
+        }
+    },
+    /*设置弹出框的大小*/
+    SetModalSize: function (modal, options) {
+        if (options.height) {
+            var height = String(options.height);
+            if (height.indexOf("px") < 0) {
+                height += "px";
+            }
+            modal.css("height", height);
+        }
+        if (options.width) {
+            var width = String(options.width);
+            if (width.indexOf("px") < 0) {
+                width += "px";
+            }
+            modal.css("width", width);
+        }
+    },
+    /*设置弹出框中间区域的大小*/
+    SetModalBodySize: function (modal, options) {
+        var height = 0;
+        if (options.height) {
+            height = parseInt(options.height);
+        }
+        if (height == 0 || !height) {
+            height = modal.outerHeight(true);
+        }
+        var headHeight = $(".modal-header", modal).outerHeight(true);
+        var footHeight = $(".modal-footer", modal).outerHeight(true);
+        $(".modal-body", modal).css("height", (height - headHeight - footHeight) + "px");
     }
 }
+
+
+/**
+* 验证组件
+* @namespace BootStrap.Validatebox
+* @description 设计目的是为了验证输入的表单字段是否有效,该验证框可以结合form(表单)插件并防止表单重复提交
+*/
+BootStrap.Validatebox = {
+    Html: {
+        TipHtml: '<div class="popover fade %2 in" style="display: block;"><div class="arrow"></div><div class="popover-content popover-content-other">%1</div></div>'
+    },
+    /*位置*/
+    Position: {
+        right: "right",
+        top: "top",
+        bottom: "bottom"
+    },
+    ValidateData: [],
+    Defaults: {
+        /*默认存在的规则*/
+        Rules: {
+            email: function (jq, options) {
+                var jqInput;
+                if (typeof jq == "string") {
+                    jqInput = $(jq);
+                } else {
+                    jqInput = jq;
+                }
+                var validateBox = BootStrap.Validatebox;
+                var reqResult = validateBox.ValidateEmpty(jqInput, options);
+                var tip = validateBox.GetTipElement(jqInput, options);
+                if (!reqResult) {
+                    validateBox.UpdateTipText(tip, "邮箱不能为空！");
+                    validateBox.SetTipPosition(jqInput, tip, options); //设置提示显示的位置并显示
+                    return false;
+                }
+                var filter = /^[a-zA-Z0-9_-]+@[a-zA-Z0-9_-]+(\.[a-zA-Z0-9_-]+)+$/;
+                if (!filter.test(jqInput.val())) {
+                    options.message || (options.message = "邮箱不正确！");
+                    validateBox.UpdateTipText(tip, options.message);
+                    validateBox.SetTipPosition(jqInput, tip, options); //设置提示显示的位置并显示
+                    return false;
+                }
+                tip.hide();
+                return true;
+            }
+        }
+    },
+    /*验证元素必须要有id或者name属性*/
+    Init: function (jqfilter, options) {
+        var element = $(jqfilter);
+        if (element.length < 1) {
+            return;
+        }
+        var label = this.GetNameOrId(element);
+        this.ValidateData.push({ "label": label, "jqfilter": jqfilter, "options": options }); //缓存数据
+        if (element[0].tagName.toLowerCase() == "input") {
+            element.bind("blur", function () {
+                var validateBox = BootStrap.Validatebox;
+                var data = BootStrap.Tools.GetDataByLabel(validateBox.ValidateData, "label", validateBox.GetNameOrId(element)); //获取数据
+                if (!data) return;
+                var _element = $(data.jqfilter);
+                switch (options.validType) {
+                    case "email":
+                        validateBox.Defaults.Rules[options.validType](_element, data.options);
+                        break;
+                    default:
+                        break;
+                }
+            });
+        }
+
+    },
+    /*即刻验证输入数据的正确性*/
+    Validate: function (jqfilter, options) {
+        var validateBox = BootStrap.Validatebox;
+        switch (options.validType) {
+            case "email":
+                validateBox.Defaults.Rules[options.validType](jqfilter, options);
+                break;
+            default:
+                break;
+        }
+    },
+    CreateRule: function () {
+
+    },
+    GetNameOrId: function (jqInput) {
+        var id = jqInput.attr("id");
+        if (id) {
+            return id;
+        }
+        id = jqInput.attr("name");
+        if (!id) {
+            BootStrap.Window.Messager.Alert({ title: "提示", msg: "验证元素必须有Id或者Name属性" });
+        }
+        return id;
+    },
+    UpdateTipText: function (tip, msg) {
+        $(".popover-content", tip).text(msg);
+    },
+    /*根据设置，获取提示信息*/
+    GetTipElement: function (jqEle, options) {
+        var msg = "输入不正确！";
+        if (options.message) {
+            msg = options.message;
+        }
+        var tip, nameOrId = this.GetNameOrId(jqEle);
+        $(".popover").each(function () {
+            if ($(this).attr("taget") == nameOrId) {
+                tip = $(this);
+                return;
+            }
+        });
+        if (!tip) {
+            tip = $(String.format(BootStrap.Validatebox.Html.TipHtml, msg, BootStrap.Validatebox.Position[options.position ? options.position : "right"]));
+            tip.attr("taget", nameOrId);
+        }
+        return tip;
+    },
+    /*验证是否为空*/
+    ValidateEmpty: function (jqInput, options) {
+        if (options.required) {
+            if ($.trim(jqInput.val()) != "") {
+                return true;
+            }
+            return false;
+        }
+        return true;
+    },
+    /*设置提示框的位置并显示*/
+    SetTipPosition: function (jqEle, tip, options) {
+        jqEle.after(tip);
+        var inputOs = jqEle.offset();
+        var left = inputOs.left;
+        var top = inputOs.top;
+        switch (options.position) {
+            case this.Position.top:
+                left = left + (jqEle.width() - tip.width()) / 2;
+                top = top - jqEle.outerHeight(true) - $(".arrow", tip).outerHeight(true);
+                break;
+            case this.Position.bottom:
+                left = left + (jqEle.width() - tip.width()) / 2;
+                top = top + jqEle.height() + $(".arrow", tip).outerHeight(true);
+                break;
+            default: //默认是右
+                left = left + jqEle.width() + 12;
+                top = top - jqEle.height() / 2;
+                break;
+        }
+        tip.css({ "left": left + "px", "top": top + "px" }).show();
+    },
+    /*设置提示框的位置并显示*/
+    SetTipPosition2: function (jqFilter, options) {
+        var jqEle = $(jqFilter);
+        var tip = BootStrap.Validatebox.GetTipElement(jqEle, options);
+        this.SetTipPosition(jqEle, tip, options);
+    }
 }
-;
 
 /**
 * bootstrap工具类
@@ -1560,6 +2206,7 @@ BootStrap.Tools = {
             e.stopPropagation();
         else
             window.event.cancelBubble = true;
+        //if (e.preventDefault) e.preventDefault();
     },
     /**
     * 清除iframe，并释放内存
@@ -1598,7 +2245,7 @@ BootStrap.Tools = {
                 "opacity": opacity ? opacity : "0.8",
                 "overflow": "hidden",
                 "width": function () { return $(document).width(); },
-                "z-index": "1000"
+                "z-index": "10"
             });
             maskLayout.show();
             //maskLayout.fadeIn(200);
@@ -1612,6 +2259,49 @@ BootStrap.Tools = {
         maskLayout.hide();
         //$(".mask_layout").fadeOut(200);
     },
+    /**
+    * 在固定区域显示加载图
+    * @param {Number} opacity，透明度，小数表示
+    * @param {Number} top，位置类型：absolute，relative
+    */
+    ShowMaskLayout2: function (opacity, top) {
+        var newTop = String(top);
+        if (newTop.indexOf("px") < 0) {
+            newTop += "px";
+        }
+        var maskLayout = $(".grid_mask_layout");
+        if (maskLayout.length < 1) {
+            maskLayout = $("<div class=\"grid_mask_layout\" style=\"display: none;\"></div>");
+            $(".body-panel-content").append(maskLayout);
+        }
+        if (maskLayout.css("display") == "none") {
+            maskLayout.css({
+                "position": "absolute",
+                "top": newTop,
+                "left": "0px",
+                //                "margin-left": "0px",
+                //                "margin-top": "0px",
+                "background-color": "#000000",
+                "height": function () { return $(document).height() - top; },
+                "filter": "alpha(opacity=" + (parseInt(opacity) * 100) + ")",
+                "opacity": opacity ? opacity : "0.8",
+                "overflow": "hidden",
+                "width": "100%",
+                "z-index": "1000"
+            });
+            maskLayout.show();
+            //maskLayout.fadeIn(200);
+        }
+    },
+    /*隐藏指定区域的遮罩图*/
+    HideMaskLayout2: function () {
+        var maskLayout = $(".grid_mask_layout");
+        if (maskLayout.css("display") == "none") {
+            return;
+        }
+        maskLayout.hide();
+        //$(".mask_layout").fadeOut(200);
+    },
     GetStyleSheetByArrry: function (styleSheetArr) {
         var style = [];
         $.each(styleSheetArr, function () {
@@ -1619,34 +2309,61 @@ BootStrap.Tools = {
         });
         return style.join(" ");
     },
+    /*创建样式*/
     CreateStyle: function (styleSheetArr) {
         if ($.browser.msie) {
             var sheet = document.createStyleSheet();
             $.each(styleSheetArr, function () {
                 sheet.addRule(this.key, this.value);
             });
-        }
-        else {
+        } else {
             var styleStr = this.GetStyleSheetByArrry(styleSheetArr);
             var style = document.createElement('style');
             style.type = 'text/css';
             style.innerHTML = styleStr; // "body{ background-color:blue }";
             document.getElementsByTagName('HEAD').item(0).appendChild(style);
         }
-        //if ($.browser.msie) {
-        //    window.style=styleStr;
-        //    document.createStyleSheet("javascript:style");
-        //}
     },
+    /*创建样式*/
+    CreateStyle2: function (strStyleSheet) {
+        $(document.body).append("<style>" + strStyleSheet + "</style>");
+    },
+    /*获取json数据的所有key*/
     ReadJsonKeys: function (jsonData) {
         var keys = [];
-        for (var i = 0, len = jsonData.length; i < len; i++) {
-            for (var key in jsonData[i]) {
-                //alert("key：" + key + ",value：" + jsonData[i][key]);
-                keys.push(key);
-            }
+        if (!jsonData) {
+            return keys;
+        }
+        for (var key in jsonData) {
+            //alert("key：" + key + ",value：" + jsonData[key]);
+            keys.push(key);
         }
         return keys;
+    },
+    /*
+    * 判断Json是否为空
+    * @param {object} jsonData，json数据
+    * return true：为空；false不为空
+    */
+    JudgeJsonIsNull: function (jsonData) {
+        if (!jsonData) {
+            return true;
+        }
+        for (var key in jsonData) {
+            if (key) return false;
+        }
+        return true;
+    },
+    /*根据标识获取对应的数据*/
+    GetDataByLabel: function (jsonData, label, value) {
+        var data;
+        for (var i in jsonData) {
+            if (jsonData[i][label] == value) {
+                data = jsonData[i];
+                break;
+            }
+        }
+        return data;
     },
     /**
     * Ajax获取数据
@@ -1681,55 +2398,80 @@ BootStrap.Tools = {
     Clone: function (obj) {
         if (typeof (obj) != 'object') return obj;
         if (obj == null) return obj;
+        if ((obj instanceof Array) && obj.length != undefined) {
+            //浅复制
+            return obj.concat();
+        }
         var newObj = new Object();
         for (var i in obj)
             newObj[i] = this.Clone(obj[i]);
         return newObj;
+    },
+    /*获取浏览器的高度*/
+    GetScreenHeight: function () {
+        return (document.documentElement && document.documentElement.clientHeight || window.innerHeight || document.body.clientHeight);
+    },
+    /*获取浏览器的宽度*/
+    GetScreenWidth: function () {
+        return (document.documentElement && document.documentElement.clientWidth || window.innerWidth || document.body.clientWidth);
+    },
+    /*获取Id，去掉特殊字符：# .（类标记） 等*/
+    GetIdNameTrimOther: function (id) {
+        if (!id) return "";
+        return id.replace("#", "").replace(".", "");
     }
+
 };
 
 BootStrap.InitPage = {
     isFirstLoad: true,
-    Init: function () {
-        this.AddEvent();
-        this.SetPageElementPosition(0);
-
+    Init: function (tId) {
+        this.AddEvent(tId);
+        this.SetPageElementPosition(tId, 0);
     },
-    AddEvent: function () {
-        $(".accordion-heading").click(function () {//搜索区域的隐藏事件
+    AddEvent: function (tId) {
+        //这里也要加上区分
+        $(".accordion-heading").click(function () {//搜索区域的隐藏事件              //这里需要重新写，因为多个列表的问题----------------
             var jqAccordion = $(this).find("a");
             var accordion = $($(this).attr("data-target"));
             accordion.fadeToggle(200);
             if (jqAccordion.hasClass("accordion-collapse")) {
                 jqAccordion.removeClass("accordion-collapse").addClass("accordion-expand");
-                BootStrap.InitPage.SetPageElementPosition(0); //展开后，高度也会变化
+                BootStrap.InitPage.SetPageElementPosition(tId, 0); //展开后，高度也会变化
             } else {
                 jqAccordion.removeClass("accordion-expand").addClass("accordion-collapse");
-                var collapseHeight = accordion.outerHeight(false);
-                BootStrap.InitPage.SetPageElementPosition(collapseHeight); //隐藏后，高度发生变化
+                var collapseHeight = accordion.outerHeight(true);
+                BootStrap.InitPage.SetPageElementPosition(tId, collapseHeight); //隐藏后，高度发生变化
             }
         });
     },
     /**
-    * 设置当前页大高度
+    * 设置当前页的高度
     * @param {offsetHeight} 高度偏移量，正负数都可以
     */
-    SetPageElementPosition: function (offsetHeight) {
-        var screenHeight = (document.documentElement && document.documentElement.clientHeight || window.innerHeight || document.body.clientHeight);
-        var accordionHeight = $("#accordion").outerHeight(true);
-        var toolbarHeight = $(".datagrid-toolbar").outerHeight(false);
-        var pageHeight = $(".pagination").outerHeight(true);
-        $(".body-panel-content").css("height", (screenHeight - accordionHeight - pageHeight - toolbarHeight + offsetHeight) + "px");
+    SetPageElementPosition: function (tId, offsetHeight) {
+        if (tId && tId.indexOf("#") == -1) {
+            tId = "#" + tId;
+        }
+        var screenHeight = BootStrap.Tools.GetScreenHeight();
+        var accordionHeight = $("#accordion").outerHeight(true); //这里需要重新写，因为多个列表的问题----------------
+        if (!accordionHeight) accordionHeight = 0;
+        var tbarFilter = tId ? tId + "_toolbar" : ".datagrid-toolbar";
+        var toolbarHeight = $(tbarFilter).outerHeight(true);
+        var pagFilter = tId ? tId + "_pagination" : ".pagination";
+        var pageHeight = $(pagFilter).outerHeight(true);
+        if (!toolbarHeight) toolbarHeight = 0;
+        if (!pageHeight) pageHeight = 0;
+        var setH = (screenHeight - accordionHeight - pageHeight - toolbarHeight + offsetHeight);
+        var filterBody = tId ? tId + "_body_panel" : ".body-panel-content";
+        var h = setH + "px";
+        $(filterBody).css("height", h).children().css("height", h);
+        var lbody = tId ? tId + "_lbody" : ".datagrid-body";
+        var rbody = tId ? tId + "_rbody" : ".datagrid-body";
+        var rhdiv = tId ? tId + "_rh_div" : ".datagrid-header";
+        $(lbody + "," + rbody).css("height", (setH - $(rhdiv).height()) + "px");
     }
-}
-;
-/**
-* 初始化BootStrap的各个组件
-*/
-$(function () {
-    //    BootStrap.Tabs.Init(); //标签页初始化
-    BootStrap.InitPage.Init();
-});
+};
 
 
 
@@ -1893,7 +2635,7 @@ BootStrap.layout = {
 
         return _currentPos;
     },
-    _split: function (_that,     , _lspV) {
+    _split: function (_that, _lspH, _lspV) {
         var $this = this;
         $(document).bind("mousemove", function (e) {
             //获取当前
@@ -1935,7 +2677,6 @@ BootStrap.layout = {
 
         //横向轴拖动
         _lspH.bind("mousedown", function () {
-            alert("dddddd");
             _lspH.css({
                 opacity: "0.6"
             });
@@ -2034,7 +2775,7 @@ BootStrap.layout = {
         }
         else if ($this.thisDrag == "left") {
             var val1 = $this._dragArea.left.x1,
-                val2 = $this._dragArea.right.x1 - $this._dragArea.left.x2,
+                val2 = $this._dragArea.right.x1 - $this._dragArea.left.x1,
                 val3 = $this._dragArea.left.x2;
 
             $this._size.east[0] = val1;
@@ -2070,7 +2811,7 @@ BootStrap.layout = {
         });
         //初始化垂直条位置
         _lsp.css({
-            left: $this._location.east[1] + "px",
+            left: $this._dragArea.left.x1 + "px",
             top: $this._dragArea.top.y2 + "px",
             width: "5px",
             height: $this._size.east[1] + "px"
